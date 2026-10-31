@@ -12,7 +12,9 @@ def wakes(config, pcm, cutoff=None):
     hits, t = [], 0.0
     for at in range(0, len(pcm) - 320, 320):
         for f in feats.process_streaming(pcm[at:at + 320].tobytes()):
-            if ww.process_streaming(f): hits.append(round(at / 16000, 2))
+            if ww.process_streaming(f):
+                at_s = round(at / 16000, 2)
+                if not hits or at_s - hits[-1] > 1.0: hits.append(at_s)   # one word, one wake (the box is quiet ~1 s after)
     return hits
 
 if __name__ == '__main__':

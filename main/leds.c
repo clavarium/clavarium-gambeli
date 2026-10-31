@@ -13,6 +13,8 @@ static volatile led_pattern_t pattern = LED_OFF;
 static volatile uint32_t color;
 static volatile uint32_t since;   // tick when the pattern was set
 
+/* Every light but an alert at half its former strength: at night it lit half the room (31-10). */
+#define DIM 0.45f
 static float shown[LED_COUNT][3];      // what is lit now, in fractions of a level
 static float from[LED_COUNT][3];       // what was lit when the pattern changed
 static float carry[LED_COUNT][3];      // the fraction not shown yet (dithering: smooth ramps even at low light)
@@ -53,7 +55,8 @@ static void animate(void *arg)
             case LED_SPIN: {                                                                     // thinking: a slow, soft turn
                 float head = fmodf(t * 3.5f, LED_COUNT);
                 float d = fmodf(head - i + LED_COUNT, LED_COUNT);
-                k = d < 4 ? 0.22f * (1 - d / 4) : 0;
+                /* each light rises before the head reaches it, and fades behind it: no light switched on at once (31-10) */
+                k = d < 4 ? 0.22f * (1 - d / 4) : d > LED_COUNT - 1.5f ? 0.22f * (d - (LED_COUNT - 1.5f)) / 1.5f : 0;
                 break;
             }
             case LED_BLINK2: k = t < 1.6f ? 0.18f * (0.5f - 0.5f * cosf(t * 2 * (float)M_PI / 0.8f)) : 0; break;   // error: two soft swells
@@ -61,7 +64,7 @@ static void animate(void *arg)
             case LED_OFFLINE: k = i % 2 ? 0 : 0.015f + 0.05f * (0.5f + 0.5f * sinf(t * 0.7f)); break;            // a faint, slow glow
             case LED_ALERT: k = 0.15f + 0.65f * (0.5f + 0.5f * sinf(t * 5.0f)); break;          // a real alert: bright, seen across the room
             }
-            put(i, c, k, t);
+            put(i, c, k * (pattern == LED_ALERT ? 1.0f : DIM), t);
         }
         led_strip_refresh(strip);
         vTaskDelayUntil(&wake, pdMS_TO_TICKS(20));   // a steady 50 frames a second, whatever else runs
