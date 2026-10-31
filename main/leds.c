@@ -1,4 +1,4 @@
-// The ring of 7 RGB LEDs: one pattern at a time, animated at 25 frames a second.
+// The ring of 7 RGB LEDs: one pattern at a time, animated at 50 frames a second.
 #include "box.h"
 #include "led_strip.h"
 #include "freertos/FreeRTOS.h"
@@ -13,22 +13,33 @@ static volatile led_pattern_t pattern = LED_OFF;
 static volatile uint32_t color;
 static volatile uint32_t since;   // tick when the pattern was set
 
-static float shown[LED_COUNT][3];
+static float shown[LED_COUNT][3];      // what is lit now, in fractions of a level
+static float from[LED_COUNT][3];       // what was lit when the pattern changed
+static float carry[LED_COUNT][3];      // the fraction not shown yet (dithering: smooth ramps even at low light)
+static volatile bool changed;
 
-/* A new pattern blends in over half a second (a sudden switch-on was harsh, 31-10); after that the
-   pattern itself is drawn exactly, so a pulse stays even (smoothing it all the time made it irregular). */
+/* A change of colour or intensity is a one-second crossfade, eased at both ends (steps between
+   states were harsh, 31-10); then the pattern itself is drawn exactly. */
 static void put(int i, uint32_t rgb, float k, float t)
 {
     float want[3] = { ((rgb >> 16) & 255) * k, ((rgb >> 8) & 255) * k, (rgb & 255) * k };
-    float a = t < 0.5f ? 0.15f : 1.0f;
-    for (int j = 0; j < 3; j++) shown[i][j] += (want[j] - shown[i][j]) * a;
-    led_strip_set_pixel(strip, i, (uint32_t)shown[i][0], (uint32_t)shown[i][1], (uint32_t)shown[i][2]);
+    float x = t < 1.0f ? t : 1.0f;
+    float e = x * x * (3 - 2 * x);
+    uint32_t out[3];
+    for (int j = 0; j < 3; j++) {
+        shown[i][j] = from[i][j] + (want[j] - from[i][j]) * e;
+        float v = shown[i][j] + carry[i][j];
+        out[j] = v < 0 ? 0 : v > 255 ? 255 : (uint32_t)v;
+        carry[i][j] = v - out[j];
+    }
+    led_strip_set_pixel(strip, i, out[0], out[1], out[2]);
 }
 
 static void animate(void *arg)
 {
     TickType_t wake = xTaskGetTickCount();
     for (;;) {
+        if (changed) { changed = false; for (int i = 0; i < LED_COUNT; i++) for (int j = 0; j < 3; j++) from[i][j] = shown[i][j]; }
         float t = (xTaskGetTickCount() - since) * portTICK_PERIOD_MS / 1000.0f;
         uint32_t c = color;
         for (int i = 0; i < LED_COUNT; i++) {
@@ -53,7 +64,7 @@ static void animate(void *arg)
             put(i, c, k, t);
         }
         led_strip_refresh(strip);
-        vTaskDelayUntil(&wake, pdMS_TO_TICKS(40));   // a steady 25 frames a second, whatever else runs
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(20));   // a steady 50 frames a second, whatever else runs
     }
 }
 
@@ -72,4 +83,5 @@ void leds_set(led_pattern_t p, uint32_t rgb)
     color = rgb;
     since = xTaskGetTickCount();
     pattern = p;
+    changed = true;
 }
