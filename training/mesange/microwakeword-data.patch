@@ -1,0 +1,13 @@
+diff --git a/microwakeword/data.py b/microwakeword/data.py
+index d1b2992..211d6c7 100644
+--- a/microwakeword/data.py
++++ b/microwakeword/data.py
+@@ -302,7 +302,7 @@ class MmapFeatureGenerator(object):
+                 for feature_start_index in range(
+                     0,
+                     spectrogram.shape[0] - features_length,
+-                    int(1000 * self.step * self.stride),
++                    3 * int(1000 * self.step * self.stride),
+                 ):  # 10*2 features corresponds to 200 ms
+                     split_spectrogram = spectrogram[
+                         feature_start_index : feature_start_index + features_length
