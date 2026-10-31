@@ -24,7 +24,11 @@ static void player(void *arg)
         if (got < 2 && !speech_held()) got = xStreamBufferReceive(stream, buf, sizeof buf, pdMS_TO_TICKS(40));
         else if (got < 2) vTaskDelay(pdMS_TO_TICKS(40));
         if (got >= 2) {
-            if (!playing) { board_amp(true); playing = true; }
+            if (!playing) {   // the amplifier needs a moment to wake: without it, the first syllable was lost (31-10)
+                board_amp(true); playing = true;
+                static int16_t hush[BOX_CHUNK];
+                for (int k = 0; k < 8; k++) board_play(hush, BOX_CHUNK);
+            }
             idle = 0;
             board_play(buf, got / 2);
         } else if (playing && ++idle > 25) {   // a second of nothing: amplifier off
