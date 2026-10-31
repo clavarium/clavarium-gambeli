@@ -48,7 +48,7 @@ static void set_state(state_t s)
     case ST_IDLE:    leds_set(muted ? LED_DOT : LED_OFF, 0xff0000); break;
     case ST_LISTEN:  leds_set(LED_SOLID, 0x2060ff); break;
     case ST_THINK:   leds_set(LED_SPIN, 0x3070ff); break;
-    case ST_SPEAK:   leds_set(LED_BREATHE, 0xffffff); break;
+    case ST_SPEAK:   leds_set(LED_BREATHE, 0xffd8a0); break;   // warm
     case ST_ALERT:   leds_set(LED_ALERT, 0xff2000); break;
     case ST_UPDATE:  leds_set(LED_SPIN, 0x9000ff); break;
     case ST_ERROR:   leds_set(LED_BLINK2, 0xff3020); break;
@@ -290,6 +290,10 @@ static void on_message(char *text)
     } else if (!strcmp(t, "speak.start")) {
         speak_ending = false;
         speech_accept = true;
+        /* THE BOX'S WORDS, sound and light together (agreed 31-10): rising + steady blue, I listen; two light
+           notes + turning blue, got it; two falling notes + lights out, I stopped listening; a small bell +
+           warm breathing, a message comes (said of itself, not an answer). */
+        if (!listening && state == ST_IDLE) sounds_play(SND_BELL);
         if (!listening) set_state(ST_SPEAK);   // someone is speaking: it waits for the end of their sentence
     } else if (!strcmp(t, "speak.end")) {
         const char *then = cJSON_GetStringValue(cJSON_GetObjectItem(m, "then"));

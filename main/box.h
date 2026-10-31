@@ -25,7 +25,7 @@ void leds_init(void);
 void leds_set(led_pattern_t pattern, uint32_t rgb);  // 0xRRGGBB
 
 // sounds.c: short cues, synthesised, never fetched
-typedef enum { SND_DING, SND_TIC, SND_ERROR, SND_CHIME, SND_CLICK, SND_DONE, SND_HEARD } sound_t;
+typedef enum { SND_DING, SND_TIC, SND_ERROR, SND_CHIME, SND_CLICK, SND_DONE, SND_HEARD, SND_BELL } sound_t;
 void sounds_init(void);                              // starts the playback task
 void sounds_play(sound_t s);
 void speech_feed(const uint8_t *pcm, size_t len, bool frame_start);   // response audio from Clavarium (a frame may come in parts)
