@@ -349,6 +349,7 @@ void app_main(void)
     bool paired = store_load();
     board_volume(conf.volume);
     wifi_base_init();
+    improv_start();
     ESP_LOGI(TAG, "firmware %s, %s", esp_app_get_description()->version, paired ? "paired" : "not paired");
     if (!paired || setup_asked()) portal_run(NULL);
 
@@ -391,7 +392,7 @@ void app_main(void)
         TickType_t now = xTaskGetTickCount();
         if (state == ST_SPEAK && speak_ending && speech_idle()) { speech_accept = false; speak_ending = false; set_state(ST_IDLE); }
         if (state == ST_ERROR && now - state_since > pdMS_TO_TICKS(1500)) set_state(ST_IDLE);
-        if (state == ST_THINK && now - state_since > pdMS_TO_TICKS(30000)) error_cue();   // no answer came
+        if (state == ST_THINK && now - state_since > pdMS_TO_TICKS(120000)) set_state(ST_IDLE);   // no answer came: quietly back
         if (state == ST_ALERT && alert_chimes < 3 && now - state_since > pdMS_TO_TICKS(alert_chimes * 4000)) {
             alert_chimes++;
             sounds_play(SND_CHIME);

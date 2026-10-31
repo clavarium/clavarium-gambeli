@@ -48,6 +48,11 @@ For a browser flash (Chrome or Edge, Web Serial), one image holds everything:
 idf.py merge-bin -o boitier-vocal.bin    # write it at 0x0
 ```
 
+## Setup over the cable
+
+Right after a browser flash, the flash page can give the Wi-Fi (and the pairing) over the same
+cable: Improv Wi-Fi, see [PROTOCOL.md](PROTOCOL.md). The access point stays for a box moved elsewhere.
+
 ## Without Clavarium
 
 `test/server.mjs` speaks the same protocol: pairing code `TEST-0000`, every sentence saved as a

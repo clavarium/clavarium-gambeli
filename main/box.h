@@ -53,6 +53,9 @@ bool link_send_audio(const int16_t *pcm, int samples);
 int  link_rssi(void);
 extern volatile bool speech_accept;                  // binary frames are played only while set
 
+// improv.c: Wi-Fi (and pairing) over the USB line, from the flash page
+void improv_start(void);
+
 // ota.c
 bool ota_install(const char *url, const char *sha256, char *detail, size_t detail_len);
 

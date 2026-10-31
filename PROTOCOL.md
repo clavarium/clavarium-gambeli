@@ -5,7 +5,7 @@ roots (ESP-IDF's certificate bundle).
 
 ## Pairing
 
-`POST {clavarium}/api/box/pair`
+`POST {clavarium}/c/api/box/pair`
 
 ```json
 { "code": "K7Q2-M9PX", "room": "Living room", "type": "voice-box/1", "firmware": "0.1.0",
@@ -19,7 +19,7 @@ The code comes from Clavarium (8 characters, valid 10 minutes).
 
 ## Connection
 
-`wss://{clavarium}/api/box/ws` with `Authorization: Bearer <key>`.
+`wss://{clavarium}/c/api/box/ws` with `Authorization: Bearer <key>`.
 
 - `401`: the key was withdrawn. The box forgets its settings and goes back to setup.
 - Connection lost: the box reconnects by itself after 1, 2, 4… up to 60 seconds, showing "offline" meanwhile.
@@ -62,3 +62,15 @@ is ignored, never fatal.
 
 Nothing leaves the microphone outside a sentence, and nothing is recorded on the box. Mute stops
 the microphone. The Wi-Fi password and the key stay in the box's storage: never logged, never sent back.
+
+## Over the USB cable: Improv
+
+Right after a browser flash, the same page gives the box its Wi-Fi over the cable: Improv Wi-Fi,
+serial version 1 (improv-wifi.com), on the box's own USB port, beside its log lines. Supported:
+the commands 1 (Wi-Fi), 2 (state), 3 (device information) and 4 (scan). One more, ours:
+
+| Command | Strings | Effect |
+|---|---|---|
+| `0xC0` | Clavarium's address, the room, a pairing code | kept until the next Wi-Fi command, which then pairs too |
+
+A refused pairing is the error `0x80`. Once provisioned, the box restarts, connected.

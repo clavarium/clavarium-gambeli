@@ -1,4 +1,4 @@
-// The permanent connection to Clavarium: wss://…/api/box/ws, key in Authorization.
+// The permanent connection to Clavarium: wss://…/c/api/box/ws, key in Authorization.
 // Text frames are JSON messages, handed to the main task; binary frames are speech, played at once.
 #include "box.h"
 #include "esp_websocket_client.h"
@@ -62,7 +62,7 @@ static void run(void *arg)
 {
     char url[320], auth[128];
     const char *rest = strncmp(conf.url, "https://", 8) == 0 ? conf.url + 8 : strncmp(conf.url, "http://", 7) == 0 ? conf.url + 7 : conf.url;
-    snprintf(url, sizeof url, "%s://%s/api/box/ws", strncmp(conf.url, "http://", 7) == 0 ? "ws" : "wss", rest);
+    snprintf(url, sizeof url, "%s://%s/c/api/box/ws", strncmp(conf.url, "http://", 7) == 0 ? "ws" : "wss", rest);
     snprintf(auth, sizeof auth, "Authorization: Bearer %s\r\n", conf.key);
     int wait = 1;
     for (;;) {

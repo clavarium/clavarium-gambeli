@@ -96,11 +96,11 @@ int wifi_scan_json(char *out, size_t len)
     return w;
 }
 
-// POST {url}/api/box/pair. On success the id and key land in conf; otherwise `why` says it in one sentence.
+// POST {url}/c/api/box/pair. On success the id and key land in conf; otherwise `why` says it in one sentence.
 bool pair_box(const char *code, char *why, size_t why_len)
 {
     char url[160], body[384], resp[512] = {0};
-    snprintf(url, sizeof url, "%s/api/box/pair", conf.url);
+    snprintf(url, sizeof url, "%s/c/api/box/pair", conf.url);
     cJSON *o = cJSON_CreateObject();
     cJSON_AddStringToObject(o, "code", code);
     cJSON_AddStringToObject(o, "room", conf.room);

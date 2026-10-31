@@ -6,7 +6,7 @@ import path from 'node:path';
 import WebSocket from 'ws';
 import { startServer, CODE } from './server.mjs';
 
-const pair = (port, code) => fetch(`http://127.0.0.1:${port}/api/box/pair`, {
+const pair = (port, code) => fetch(`http://127.0.0.1:${port}/c/api/box/pair`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code, room: 'Salon', type: 'voice-box/1', firmware: '0.1.0', capabilities: ['mic'] }),
 });
@@ -21,11 +21,11 @@ test('a box pairs, says a sentence, and hears it back', async () => {
         assert.equal(box.name, 'Salon');
         assert.equal(box.key.length, 43);
 
-        const refused = new WebSocket('ws://127.0.0.1:18080/api/box/ws', { headers: { Authorization: 'Bearer nope' } });
+        const refused = new WebSocket('ws://127.0.0.1:18080/c/api/box/ws', { headers: { Authorization: 'Bearer nope' } });
         const status = await new Promise((ok) => refused.on('unexpected-response', (q, res) => ok(res.statusCode)));
         assert.equal(status, 401);
 
-        const ws = new WebSocket('ws://127.0.0.1:18080/api/box/ws', { headers: { Authorization: `Bearer ${box.key}` } });
+        const ws = new WebSocket('ws://127.0.0.1:18080/c/api/box/ws', { headers: { Authorization: `Bearer ${box.key}` } });
         await new Promise((ok) => ws.on('open', ok));
         const got = [];
         let audio = 0;

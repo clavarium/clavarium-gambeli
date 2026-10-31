@@ -33,7 +33,7 @@ function pcmOf(file) {   // the data chunk of a 16 kHz mono 16-bit .wav
 export function startServer({ port = 8080, dir = '.', reply = null, log = console.log } = {}) {
     const keys = new Map();   // key -> box
     const server = http.createServer((req, res) => {
-        if (req.method === 'POST' && req.url === '/api/box/pair') {
+        if (req.method === 'POST' && req.url === '/c/api/box/pair') {
             let body = '';
             req.on('data', (c) => { body += c; });
             req.on('end', () => {
@@ -52,7 +52,7 @@ export function startServer({ port = 8080, dir = '.', reply = null, log = consol
     const wss = new WebSocketServer({ noServer: true });
     server.on('upgrade', (req, socket, head) => {
         const key = (req.headers.authorization || '').replace(/^Bearer /, '');
-        if (req.url !== '/api/box/ws' || !keys.has(key)) {
+        if (req.url !== '/c/api/box/ws' || !keys.has(key)) {
             socket.end('HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n');
             return;
         }
