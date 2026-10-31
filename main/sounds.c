@@ -1,6 +1,8 @@
 // Playback: one task drains a stream of PCM to the speaker. Cues are synthesised into it;
 // Clavarium's speech is fed into it as it arrives. The amplifier is on only while playing.
 #include "box.h"
+#include "endpoint.h"
+#include <math.h>
 #include <stdlib.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -41,6 +43,12 @@ static void player(void *arg)
                 continue;
             }
             loud = 0;
+            /* As loud as the room needs: what matters is how far above the room's noise the voice is (31-10).
+               A quiet room: down to 45 %; a noisy one: the full volume chosen. Eased, never a jump. */
+            static float g = 1.0f;
+            float want = sqrtf(ep_room_level() / 400.0f);
+            want = want < 0.45f ? 0.45f : want > 1.0f ? 1.0f : want;
+            for (size_t i = 0; i < got / 2; i++) { g += (want - g) * 0.0005f; buf[i] = (int16_t)(buf[i] * g); }
             board_play(buf, got / 2);
         } else if (playing && ++idle > 25) {   // a second of nothing: amplifier off
             board_amp(false);

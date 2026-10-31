@@ -82,3 +82,7 @@ void ep_forget(void)
     room_n = room_at = recent_n = recent_at = since = 0; floor_ = at_start = ABSOLUTE;
     ep_begin(15);
 }
+
+/* How loud the room is now (its floor, the quiet part of the last thirty seconds): for the volume of what the
+   box says (sounds.c). */
+float ep_room_level(void) { return floor_; }

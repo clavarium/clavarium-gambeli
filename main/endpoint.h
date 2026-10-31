@@ -10,4 +10,5 @@ void ep_begin(int nobody_seconds);  // a sentence may start now; nobody speaking
 ep_result_t ep_chunk(float rms);// one 20 ms chunk of the sentence
 bool ep_heard(void);            // a voice was heard in this sentence
 float ep_bar(void);             // for the status page and the simulator
-void ep_forget(void);           // the simulator: a new room
+void ep_forget(void);
+float ep_room_level(void);      // the room's floor now: quiet ~50-100, noisy several hundred           // the simulator: a new room
