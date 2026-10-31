@@ -1,5 +1,6 @@
 // The voice box: states, keys, microphone, and Clavarium's commands (protocol v1, see PROTOCOL.md).
 #include "box.h"
+#include "endpoint.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_wifi.h"
@@ -108,43 +109,14 @@ static void listen_end(const char *reason)
     set_state(ST_THINK);
 }
 
-/* THE BAR FOLLOWS THE ROOM, as the page's dictation does (web/voice-core.js): the floor is a low quantile of
-   the last thirty seconds, speech is three times it, and a steady noise that started lately (a TV) raises the
-   bar at once. A sound counts as speech only when held as long as a syllable (a click, a breath do not). */
-#define ROOM 1500            // 20 ms chunks: thirty seconds
-#define RECENT 150           // three seconds
-static float room[ROOM], recent[RECENT], room_floor = 130;
-static int room_n, room_at, recent_n, recent_at, room_since;
-static int by_value(const void *a, const void *b) { float x = *(const float *)a, y = *(const float *)b; return (x > y) - (x < y); }
-static bool is_speech(float rms, bool started)
-{
-    static float sorted[ROOM];
-    room[room_at] = rms; room_at = (room_at + 1) % ROOM; if (room_n < ROOM) room_n++;
-    recent[recent_at] = rms; recent_at = (recent_at + 1) % RECENT; if (recent_n < RECENT) recent_n++;
-    if (++room_since >= 16 && room_n >= 50) {
-        room_since = 0;
-        memcpy(sorted, room, room_n * sizeof(float));
-        qsort(sorted, room_n, sizeof(float), by_value);
-        room_floor = sorted[room_n / 10];
-    }
-    float steady = 0;
-    if (recent_n >= RECENT) { steady = recent[0]; for (int i = 1; i < RECENT; i++) if (recent[i] < steady) steady = recent[i]; }
-    /* The box is further from a mouth than a phone is: 2.5 times to start, and once a sentence has started,
-       1.8 times the room as it was then carries it on (3 times cut a voice mid-sentence, 31-10). */
-    static float at_start = 130;   // the room, steady noise (a TV) included, when the sentence began
-    if (!started) at_start = fmaxf(fmaxf(room_floor, steady), 130);
-    if (started) return rms >= at_start * 1.8f;   // 1.6 times the quiet room alone: a TV kept it listening (31-10)
-    return rms >= at_start * 2.5f;
-}
-
 static void mic_task(void *arg)
 {
     static int16_t pcm[BOX_CHUNK];
     static int16_t four[BOX_CHUNK * 4];
     static TickType_t last_knock;
     static float quiet_rms;
-    bool was = false, ended = false, heard = false;
-    int skip = 0, chunks = 0, quiet = 0, run = 0;
+    bool was = false, ended = false;
+    int skip = 0;
     for (;;) {
         if (muted) { was = false; vTaskDelay(pdMS_TO_TICKS(20)); continue; }   // muted: the microphone is not read at all
         int n = board_mic_read_raw(four, BOX_CHUNK);
@@ -171,22 +143,18 @@ static void mic_task(void *arg)
                 else last_knock = now;
             }
             quiet_rms = quiet_rms * 0.9f + rms * 0.1f;
-            is_speech(rms, false);                                         // the room is learnt all the time
+            ep_room(rms);                                                  // the room is learnt all the time
             continue;
         }
-        if (!was) { was = true; ended = false; heard = false; skip = 15; chunks = 0; quiet = 0; run = 0; }
+        if (!was) { was = true; ended = false; skip = 15; ep_begin(); }
         if (skip > 0) { skip--; continue; }                                 // the "ding", and what the codec held meanwhile
         if (ended) continue;                                                // the main task closes the sentence
         link_send_audio(pcm, n);
         double sum = 0;
         for (int i = 0; i < n; i++) sum += (double)pcm[i] * pcm[i];
         float rms = sqrtf(sum / n);
-        chunks++;
-        if (is_speech(rms, heard)) { if (++run >= 8) heard = true; quiet = 0; }  // 160 ms held: a syllable
-        else { run = 0; quiet++; }
-        if (heard && quiet >= 100) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }         // 2 s of silence (1.4 s still cut people mid-thought, 31-10)
-        else if (!heard && chunks >= 15 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }  // 15 s and no voice: nobody speaks
-        else if (chunks >= 60 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 1, NULL); } // 60 s at most (15 s cut a story short, 31-10)
+        ep_result_t r = ep_chunk(rms);
+        if (r != EP_GOING) { ended = true; post_event(EV_LISTEN_END, r == EP_TOO_LONG, NULL); }
     }
 }
 
