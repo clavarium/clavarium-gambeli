@@ -8,7 +8,7 @@
 #include <math.h>
 #include <string.h>
 
-#define STREAM_BYTES (64 * 1024)   // 2 s of speech ahead
+#define STREAM_BYTES (512 * 1024)  // 16 s of speech ahead: a whole answer, without the link waiting on the speaker
 static StreamBufferHandle_t stream;
 static volatile bool playing;
 
@@ -22,7 +22,7 @@ static void player(void *arg)
             if (!playing) { board_amp(true); playing = true; }
             idle = 0;
             board_play(buf, got / 2);
-        } else if (playing && ++idle > 12) {   // half a second of nothing: amplifier off
+        } else if (playing && ++idle > 25) {   // a second of nothing: amplifier off
             board_amp(false);
             playing = false;
         }
@@ -34,7 +34,7 @@ void sounds_init(void)
     static StaticStreamBuffer_t meta;
     uint8_t *mem = heap_caps_malloc(STREAM_BYTES + 1, MALLOC_CAP_SPIRAM);
     stream = xStreamBufferCreateStatic(STREAM_BYTES, 2, mem, &meta);
-    xTaskCreate(player, "player", 4096, NULL, 6, NULL);
+    xTaskCreatePinnedToCore(player, "player", 4096, NULL, 9, NULL, 0);   // above the microphone and the wake word: no gaps
 }
 
 void speech_feed(const uint8_t *pcm, size_t len)

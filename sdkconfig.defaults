@@ -21,3 +21,7 @@ CONFIG_MODEL_IN_FLASH=y
 CONFIG_SR_WN_WN9_JARVIS_TTS=y
 CONFIG_SR_MN_CN_NONE=y
 CONFIG_SR_MN_EN_NONE=y
+# TLS buffers in PSRAM: the permanent link and an update's download are two TLS sessions at once,
+# and internal RAM was too short for the second (found 31-10: "download failed" on the real box).
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y

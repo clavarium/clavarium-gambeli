@@ -13,6 +13,7 @@
 enum { KEY_MAIN = 1, KEY_MUTE = 2, KEY_THIRD = 4 };
 void board_init(void);
 int board_mic_read(int16_t *mono, int samples);      // blocks; returns samples read
+int board_mic_read_raw(int16_t *four, int samples);  // the same, all four channels: R M N M
 void board_play(const int16_t *mono, int samples);   // blocks until queued to the codec
 void board_volume(int level);                        // 0-100
 void board_amp(bool on);
@@ -63,7 +64,7 @@ void improv_start(void);
 
 // wake.c: the wake word, heard on the chip
 bool wake_start(void);
-void wake_feed(const int16_t *pcm, int n);
+void wake_feed(const int16_t *four, int n);          // n samples of the four channels
 
 // ota.c
 bool ota_install(const char *url, const char *sha256, char *detail, size_t detail_len);

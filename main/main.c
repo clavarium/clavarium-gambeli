@@ -103,14 +103,16 @@ static void listen_end(const char *reason)
 static void mic_task(void *arg)
 {
     static int16_t pcm[BOX_CHUNK];
+    static int16_t four[BOX_CHUNK * 4];
     bool was = false, ended = false, heard = false;
     int skip = 0, chunks = 0, quiet = 0;
     float floor = 0;
     for (;;) {
         if (muted) { was = false; vTaskDelay(pdMS_TO_TICKS(20)); continue; }   // muted: the microphone is not read at all
-        int n = board_mic_read(pcm, BOX_CHUNK);
+        int n = board_mic_read_raw(four, BOX_CHUNK);
         if (n <= 0) continue;
-        if (!listening) { was = false; wake_feed(pcm, n); continue; }       // only the wake word hears it, on the chip
+        if (!listening) { was = false; wake_feed(four, n); continue; }      // only the wake word hears it, on the chip
+        for (int i = 0; i < n; i++) pcm[i] = four[4 * i + 1];              // the first microphone, for the sentence
         if (!was) { was = true; ended = false; heard = false; skip = 15; chunks = 0; quiet = 0; floor = 0; }
         if (skip > 0) { skip--; continue; }                                 // the "ding", and what the codec held meanwhile
         if (ended) continue;                                                // the main task closes the sentence
@@ -190,7 +192,7 @@ static void wifi_job(void *arg)
 static void ota_job(void *arg)
 {
     job_t *j = arg;
-    char detail[64] = "";
+    char detail[128] = "";
     bool ok = ota_install(j->url, j->sha, detail, sizeof detail);
     ack(j->id, ok, ok ? NULL : detail);
     free(j);
@@ -357,7 +359,7 @@ void app_main(void)
     esp_wifi_start();
     set_state(ST_OFFLINE);
     link_start();
-    xTaskCreate(mic_task, "mic", 6144, NULL, 7, NULL);
+    xTaskCreate(mic_task, "mic", 6144, NULL, 5, NULL);
     xTaskCreate(keys_task, "keys", 3072, NULL, 4, NULL);
     status_start();
     wake_start();

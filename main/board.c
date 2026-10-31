@@ -99,6 +99,15 @@ int board_mic_read(int16_t *mono, int samples)
     return samples;
 }
 
+/* The four 16-bit channels as the codec gives them: R M N M (the playback reference, a microphone,
+   nothing, the other microphone) -- what the wake word's front end takes, echo cancelled. */
+int board_mic_read_raw(int16_t *four, int samples)
+{
+    if (samples > BOX_CHUNK) samples = BOX_CHUNK;
+    if (esp_codec_dev_read(mic, four, samples * 2 * sizeof(int32_t)) != ESP_CODEC_DEV_OK) return 0;
+    return samples;
+}
+
 void board_play(const int16_t *mono, int samples)
 {
     while (samples > 0) {

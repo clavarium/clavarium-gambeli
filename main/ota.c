@@ -6,6 +6,7 @@
 #include "esp_crt_bundle.h"
 #include "mbedtls/sha256.h"
 #include <string.h>
+#include "esp_heap_caps.h"
 #include <stdio.h>
 
 bool ota_install(const char *url, const char *sha256, char *detail, size_t len)
@@ -14,7 +15,12 @@ bool ota_install(const char *url, const char *sha256, char *detail, size_t len)
     if (!part) { snprintf(detail, len, "no update partition"); return false; }
     esp_http_client_config_t hc = { .url = url, .timeout_ms = 15000, .crt_bundle_attach = esp_crt_bundle_attach };
     esp_http_client_handle_t c = esp_http_client_init(&hc);
-    if (esp_http_client_open(c, 0) != ESP_OK) { esp_http_client_cleanup(c); snprintf(detail, len, "download failed"); return false; }
+    esp_err_t opened = esp_http_client_open(c, 0);
+    if (opened != ESP_OK) {   // said with its reason and the memory left: what a remote look needs
+        snprintf(detail, len, "download failed (%s, %u bytes of internal RAM free)", esp_err_to_name(opened), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        esp_http_client_cleanup(c);
+        return false;
+    }
     esp_http_client_fetch_headers(c);
     if (esp_http_client_get_status_code(c) != 200) {
         snprintf(detail, len, "download refused (%d)", esp_http_client_get_status_code(c));
