@@ -60,6 +60,10 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *ev)
             text_len += d->data_len;
             if (text_len == (size_t)d->payload_len) {
                 text[text_len] = 0;
+                /* The speech follows speak.start at once, in this same task: it is let in here and
+                   now, not when the main task gets to the message (found on the real box: the
+                   whole answer was dropped while speak.start waited in the queue). */
+                if (strstr(text, "\"t\":\"speak.start\"")) { speech_stop(); speech_accept = true; }
                 post_event(EV_MSG, 0, text);   // the main task frees it
                 text = NULL;
             }
