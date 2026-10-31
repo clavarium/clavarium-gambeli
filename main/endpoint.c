@@ -29,7 +29,7 @@
 #ifndef EP_RELATIVE
 #define EP_RELATIVE 0.3f          // a started sentence: its own voice, not much quieter than it began (a TV behind is)
 #endif
-#define LONGEST_CHUNKS (60 * 50)
+#define LONGEST_CHUNKS (300 * 50)   // five minutes: only a TV that never stops
 
 static float room[ROOM], recent[RECENT], floor_ = ABSOLUTE, at_start = ABSOLUTE;
 static int room_n, room_at, recent_n, recent_at, since;

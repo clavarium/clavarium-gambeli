@@ -90,7 +90,31 @@ static void error_cue(void)
 
 /* ---- microphone ---- */
 
-static volatile bool follow;   // listening again without a wake word: a short wait for an answer
+static volatile bool follow;
+/* A LONG RECORDING (a meeting): asked by Clavarium, started once the box has finished speaking, the whole
+   sound sent until the button or the wake word stops it. A slow red glow while it lasts. */
+static volatile bool recording, record_pending;
+static void record_start(void)
+{
+    record_pending = false;
+    speech_stop();
+    sounds_play(SND_DING);
+    send_simple("record.start", "reason", "asked");
+    recording = true;
+    listening = true;
+    set_state(ST_LISTEN);
+    leds_set(LED_PULSE, 0xff2000);
+}
+static void record_stop(const char *reason)
+{
+    record_pending = false;
+    if (!recording) return;
+    recording = false;
+    listening = false;
+    send_simple("record.end", "reason", reason);
+    sounds_play(SND_DONE);
+    set_state(ST_THINK);
+}   // listening again without a wake word: a short wait for an answer
 
 static void listen_start(const char *reason)
 {
@@ -150,6 +174,7 @@ static void mic_task(void *arg)
             ep_room(rms);                                                  // the room is learnt all the time
             continue;
         }
+        if (recording) { link_send_audio(pcm, n); mww_feed(pcm, n); continue; }   // all of it; the wake word stops it
         if (!was) { was = true; ended = false; skip = 15; ep_begin(follow ? 6 : 15); }
         if (skip > 0) { skip--; continue; }                                 // the "ding", and what the codec held meanwhile
         if (ended) continue;                                                // the main task closes the sentence
@@ -270,6 +295,9 @@ static void on_message(char *text)
         const char *then = cJSON_GetStringValue(cJSON_GetObjectItem(m, "then"));
         listen_after = then && !strcmp(then, "listen");
         speak_ending = true;
+    } else if (!strcmp(t, "record")) {
+        if (cJSON_IsTrue(cJSON_GetObjectItem(m, "on"))) record_pending = true;
+        else record_stop("asked");
     } else if (!strcmp(t, "alert")) {
         strlcpy(alert_id, id ? id : "", sizeof alert_id);
         alert_chimes = 0;
@@ -347,7 +375,7 @@ static void on_key(int key)
         set_state(ST_IDLE);
         break;
     }
-    case ST_LISTEN: listen_end("button"); break;
+    case ST_LISTEN: if (recording) record_stop("button"); else listen_end("button"); break;
     case ST_OFFLINE: case ST_UPDATE: error_cue(); break;
     default:
         if (muted) { sounds_play(SND_CLICK); leds_set(LED_BLINK2, 0xff0000); break; }
@@ -424,6 +452,7 @@ void app_main(void)
             case EV_KEY_SHORT: on_key(ev.arg); break;
             case EV_KEY_LONG: enter_setup(); break;
             case EV_WAKE:
+                if (recording) { record_stop("wake"); break; }
                 if (!muted && !listening && state != ST_OFFLINE && state != ST_UPDATE && state != ST_ALERT) listen_start("wake");
                 else if (state == ST_OFFLINE) error_cue();   // heard, but not connected yet: say so rather than nothing
                 break;
@@ -433,6 +462,7 @@ void app_main(void)
             }
         }
         TickType_t now = xTaskGetTickCount();
+        if (record_pending && !listening && speech_idle()) record_start();
         if (!listening && state != ST_SPEAK && state != ST_UPDATE && speech_waiting()) set_state(ST_SPEAK);   // held speech, now said
         if (state == ST_SPEAK && speak_ending && speech_idle()) {
             speech_accept = false; speak_ending = false; set_state(ST_IDLE);
