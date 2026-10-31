@@ -303,6 +303,9 @@ static void on_message(char *text)
         const char *then = cJSON_GetStringValue(cJSON_GetObjectItem(m, "then"));
         listen_after = then && !strcmp(then, "listen");
         speak_ending = true;
+    } else if (!strcmp(t, "clock")) {
+        cJSON *o = cJSON_GetObjectItem(m, "offset");
+        if (cJSON_IsNumber(o)) leds_offset((int)o->valuedouble);
     } else if (!strcmp(t, "record")) {
         if (cJSON_IsTrue(cJSON_GetObjectItem(m, "on"))) record_pending = true;
         else record_stop("asked");

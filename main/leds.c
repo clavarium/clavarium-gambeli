@@ -15,11 +15,13 @@ static volatile uint32_t since;   // tick when the pattern was set
 
 #include "esp_sntp.h"
 #include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
 /* HOW BRIGHT, BY THE HOUR (Paris time, from the network's clock): seen by day, barely at night -- at night it
    lit half the room (31-10). Fades over an hour at both ends. An alert is always full. Before the clock is
-   known: the day's level. */
+   known: the day's level. Its place's hours: Clavarium tells it its offset from UTC (leds_offset). */
 #define DAY 0.45f
-#define NIGHT 0.06f
+#define NIGHT 0.03f   // lower still (31-10: « if it can go lower, I take it »)
 static float dim(void)
 {
     time_t now = time(NULL);
@@ -31,9 +33,16 @@ static float dim(void)
     if (h < 7.5f) return NIGHT + (DAY - NIGHT) * (h - 6.5f);     // 06:30 -> 07:30, up
     return DAY;
 }
+void leds_offset(int minutes_east)
+{
+    char tz[24];
+    int m = minutes_east < 0 ? -minutes_east : minutes_east;
+    snprintf(tz, sizeof tz, "UTC%c%02d:%02d", minutes_east >= 0 ? '-' : '+', m / 60, m % 60);   // POSIX: the sign is reversed
+    setenv("TZ", tz, 1); tzset();
+}
 void leds_clock(void)
 {
-    setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1); tzset();
+    if (!getenv("TZ")) { setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1); tzset(); }   // until Clavarium says its place's
     if (esp_sntp_enabled()) return;
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
