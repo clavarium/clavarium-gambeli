@@ -23,7 +23,7 @@ Prendre `url_resolved`. Formats lus par le serveur (ffmpeg) : MP3, AAC/AAC+, Ogg
 | France Info | FR | AAC 192 | http://icecast.radiofrance.fr/franceinfo-hifi.aac |
 | France Culture | FR | AAC 192 | http://icecast.radiofrance.fr/franceculture-hifi.aac |
 | FIP | FR | AAC 192 | http://icecast.radiofrance.fr/fip-hifi.aac |
-| Radio Classique | FR | MP3 | http://direct.radioclassique.fr/live/radioclassique-hautdebit.mp3 |
+| Radio Classique | FR | MP3 | https://radioclassique.ice.infomaniak.ch/radioclassique-high.mp3 |
 | RTL | FR | AAC 64 | (adresse longue : chercher « RTL » dans l'annuaire) |
 | Europe 1 | FR | AAC 128 | https://stream.europe1.fr/europe1.aac |
 | RMC | FR | MP3 128 | https://audio.bfmtv.com/rmcradio_128.mp3 |
