@@ -28,7 +28,7 @@ void leds_set(led_pattern_t pattern, uint32_t rgb);  // 0xRRGGBB
 typedef enum { SND_DING, SND_TIC, SND_ERROR, SND_CHIME, SND_CLICK, SND_DONE, SND_HEARD } sound_t;
 void sounds_init(void);                              // starts the playback task
 void sounds_play(sound_t s);
-void speech_feed(const uint8_t *pcm, size_t len);    // response audio from Clavarium
+void speech_feed(const uint8_t *pcm, size_t len, bool frame_start);   // response audio from Clavarium (a frame may come in parts)
 void speech_stop(void);                              // drop what is queued
 bool speech_idle(void);                              // nothing left to play
 bool speech_waiting(void);                           // speech received, not played yet

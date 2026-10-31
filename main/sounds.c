@@ -1,6 +1,8 @@
 // Playback: one task drains a stream of PCM to the speaker. Cues are synthesised into it;
 // Clavarium's speech is fed into it as it arrives. The amplifier is on only while playing.
 #include "box.h"
+#include <stdlib.h>
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/stream_buffer.h"
@@ -30,6 +32,15 @@ static void player(void *arg)
                 for (int k = 0; k < 8; k++) board_play(hush, BOX_CHUNK);
             }
             idle = 0;
+            /* A guard: speech is never loud all the time. Three chunks in a row near full scale is noise
+               (a scrambled stream, a fault): it is dropped and the rest of it with it, never played. */
+            static int loud;
+            long sum = 0; for (size_t i = 0; i < got / 2; i++) sum += abs(buf[i]);
+            if (sum / (long)(got / 2) > 14000) {
+                if (++loud >= 3) { speech_stop(); loud = 0; ESP_LOGW("sounds", "noise dropped"); }
+                continue;
+            }
+            loud = 0;
             board_play(buf, got / 2);
         } else if (playing && ++idle > 25) {   // a second of nothing: amplifier off
             board_amp(false);
@@ -49,13 +60,27 @@ void sounds_init(void)
     xTaskCreatePinnedToCore(player, "player", 4096, NULL, 9, NULL, 0);   // above the microphone and the wake word: no gaps
 }
 
-void speech_feed(const uint8_t *pcm, size_t len)
+/* A frame may arrive in parts of any length: a part of odd length used to drop its last byte, and every
+   sample after it was read one byte off -- a loud, scrambled noise (31-10). The odd byte is kept for the next
+   part; each new frame starts aligned whatever happened before. */
+static uint8_t odd_byte;
+static bool has_odd;
+void speech_feed(const uint8_t *pcm, size_t len, bool frame_start)
 {
-    xStreamBufferSend(stream, pcm, len & ~(size_t)1, pdMS_TO_TICKS(5000));
+    if (frame_start) has_odd = false;
+    if (len == 0) return;
+    if (has_odd) {
+        uint8_t two[2] = { odd_byte, pcm[0] };
+        xStreamBufferSend(stream, two, 2, pdMS_TO_TICKS(5000));
+        pcm++; len--; has_odd = false;
+    }
+    if (len & 1) { odd_byte = pcm[len - 1]; has_odd = true; len--; }
+    if (len) xStreamBufferSend(stream, pcm, len, pdMS_TO_TICKS(5000));
 }
 
 void speech_stop(void)
 {
+    has_odd = false;
     xStreamBufferReset(stream);
 }
 

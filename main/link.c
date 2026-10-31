@@ -52,7 +52,7 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *ev)
         break;
     case WEBSOCKET_EVENT_DATA:
         if (d->op_code == 0x2 || (d->op_code == 0x0 && !text)) {
-            if (speech_accept && d->data_len > 0) speech_feed((const uint8_t *)d->data_ptr, d->data_len);
+            if (speech_accept && d->data_len > 0) speech_feed((const uint8_t *)d->data_ptr, d->data_len, d->op_code == 0x2 && d->payload_offset == 0);
         } else if (d->op_code == 0x1 || (d->op_code == 0x0 && text)) {
             if (d->payload_offset == 0) { free(text); text = malloc(d->payload_len + 1); text_len = 0; }
             if (!text || text_len + d->data_len > (size_t)d->payload_len) break;
