@@ -1,8 +1,8 @@
 {
-  "name": "boitier-vocal",
+  "name": "gambeli",
   "version": "0.1.0",
   "private": true,
-  "description": "Firmware of the Clavarium voice box (ESP32-S3), and a test server speaking its protocol",
+  "description": "Gambeli, a voice box for Clavarium (ESP32-S3 firmware), and a test server speaking its protocol",
   "license": "MIT",
   "type": "module",
   "keywords": [

@@ -1,6 +1,6 @@
-# boitier-vocal
+# Gambeli
 
-Firmware of the **Clavarium voice box**: a small speaker in a room that you talk to. A press on the
+**Gambeli** (the mountain chickadee) is a voice box for Clavarium: a small speaker in a room that you talk to. A press on the
 button starts a sentence; the box sends it to Clavarium, which hands it to an assistant, and plays
 the answer back. The ring of LEDs always says what the box is doing. It keeps no sound.
 
@@ -27,7 +27,7 @@ second one mutes the microphone. The third one listens too.
 
 ## Setup
 
-Not configured yet (or after a 5 s press), the box opens an open Wi-Fi network **Boitier-XXXX**.
+Not configured yet (or after a 5 s press), the box opens an open Wi-Fi network **Gambeli-XXXX**.
 A phone joining it gets the setup page by itself: choose the Wi-Fi and its password, give
 Clavarium's address, the room, and the pairing code shown by Clavarium. The box joins the Wi-Fi,
 pairs (see [PROTOCOL.md](PROTOCOL.md)), and restarts connected. On failure the page says why.
@@ -45,7 +45,7 @@ idf.py -p /dev/ttyACM0 flash monitor
 For a browser flash (Chrome or Edge, Web Serial), one image holds everything:
 
 ```sh
-idf.py merge-bin -o boitier-vocal.bin    # write it at 0x0
+idf.py merge-bin -o gambeli-full.bin    # write it at 0x0
 ```
 
 ## Setup over the cable

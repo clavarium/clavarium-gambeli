@@ -3,4 +3,5 @@ managed_components/
 sdkconfig
 sdkconfig.old
 node_modules/
-boitier-vocal.bin
+gambeli.bin
+gambeli-full.bin

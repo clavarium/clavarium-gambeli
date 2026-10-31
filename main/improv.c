@@ -100,7 +100,7 @@ static void rpc(uint8_t *data, int len)
         if (wifi_connected() && conf.url[0]) { const char *u[] = { conf.url }; result(CMD_STATE, u, 1); }
         break;
     case CMD_INFO: {
-        const char *info[] = { "boitier-vocal", esp_app_get_description()->version, "ESP32-S3", conf.room[0] ? conf.room : "Boitier" };
+        const char *info[] = { "gambeli", esp_app_get_description()->version, "ESP32-S3", conf.room[0] ? conf.room : "Gambeli" };
         result(CMD_INFO, info, 4);
         break;
     }

@@ -1,4 +1,4 @@
-// Wi-Fi, pairing, and the setup access point "Boitier-XXXX" with its page on the box's own address.
+// Wi-Fi, pairing, and the setup access point "Gambeli-XXXX" with its page on the box's own address.
 #include "box.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -274,7 +274,7 @@ void portal_run(const char *why)
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
     wifi_config_t ap = { .ap = { .channel = 6, .max_connection = 4, .authmode = WIFI_AUTH_OPEN } };
-    int l = snprintf((char *)ap.ap.ssid, sizeof ap.ap.ssid, "Boitier-%02X%02X", mac[4], mac[5]);
+    int l = snprintf((char *)ap.ap.ssid, sizeof ap.ap.ssid, "Gambeli-%02X%02X", mac[4], mac[5]);
     ap.ap.ssid_len = l;
     esp_wifi_set_mode(WIFI_MODE_APSTA);
     esp_wifi_set_config(WIFI_IF_AP, &ap);
