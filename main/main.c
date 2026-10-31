@@ -153,7 +153,7 @@ static void mic_task(void *arg)
         float bar = heard ? fmaxf(250, floor * 1.6f) : fmaxf(350, floor * 2.2f);
         if (rms > bar) { heard = true; quiet = 0; } else quiet++;
         if (heard && quiet >= 100) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }         // 2 s of silence (1.4 s still cut people mid-thought, 31-10)
-        else if (chunks >= 15 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 1, NULL); } // 15 s at most
+        else if (chunks >= 60 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 1, NULL); } // 60 s at most (15 s cut a story short, 31-10)
     }
 }
 
