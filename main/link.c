@@ -63,7 +63,7 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *ev)
                 /* The speech follows speak.start at once, in this same task: it is let in here and
                    now, not when the main task gets to the message (found on the real box: the
                    whole answer was dropped while speak.start waited in the queue). */
-                if (strstr(text, "\"t\":\"speak.start\"")) { speech_stop(); speech_accept = true; }
+                if (strstr(text, "\"t\":\"speak.start\"")) speech_accept = true;   // queued after what is being said: a new message never cuts one short (31-10)
                 post_event(EV_MSG, 0, text);   // the main task frees it
                 text = NULL;
             }
