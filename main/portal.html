@@ -8,7 +8,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,sans
 main{max-width:28rem;margin:0 auto;padding:20px 16px 40px;display:grid;gap:14px}
 h1{font-size:1.3rem;margin:0}
 label{display:grid;gap:4px;font-size:.9rem;color:var(--mute)}
-input,select,button{font:inherit;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--fg)}
+input,select,button,textarea{font:inherit;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--fg)}
 button{background:var(--acc);color:#fff;border:0;font-weight:600}
 button:disabled{opacity:.5}
 #msg{min-height:1.4em}#msg.bad{color:var(--bad)}#msg.ok{color:var(--ok)}
@@ -20,9 +20,13 @@ small{color:var(--mute)}
 <div style="display:grid;gap:14px">
 <label>Wi-Fi<select name="ssid" id="ssid"><option value="">Recherche…</option></select></label>
 <label>Mot de passe du Wi-Fi<input name="pass" type="password" autocomplete="off"></label>
-<label>Adresse de Clavarium<input name="url" id="url" type="url" placeholder="https://…" required></label>
-<label>Pièce<input name="room" id="room" placeholder="Salon" required></label>
-<label>Code d'appairage<input name="code" placeholder="K7Q2-M9PX" autocapitalize="characters" required></label>
+<label>Clé de configuration<textarea name="key" id="key" rows="3" placeholder="GAMBELI-… (copiée depuis Clavarium : Accès › Voice boxes)" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea></label>
+<details><summary>Saisie détaillée</summary>
+<div style="display:grid;gap:14px;margin-top:10px">
+<label>Adresse de Clavarium<input name="url" id="url" type="url" placeholder="https://…"></label>
+<label>Pièce<input name="room" id="room" placeholder="Salon"></label>
+<label>Code d'appairage<input name="code" placeholder="K7Q2-M9PX" autocapitalize="characters"></label>
+</div></details>
 <button id="go">Connecter</button>
 </div>
 </form>
@@ -30,15 +34,17 @@ small{color:var(--mute)}
 </main>
 <script>
 const $=id=>document.getElementById(id),msg=(t,c)=>{$('msg').textContent=t;$('msg').className=c||''};
+const given=new URLSearchParams(location.search).get('k');
+if(given){$('key').value=given;msg('Configuration reçue de Clavarium : choisissez votre Wi-Fi.','ok')}
 fetch('/info').then(r=>r.json()).then(i=>{$('ver').textContent='Firmware '+i.firmware;
- if(i.url)$('url').value=i.url;if(i.room)$('room').value=i.room;if(i.why)msg(i.why,'bad')});
+ if(i.url)$('url').value=i.url;if(i.room)$('room').value=i.room;if(i.why&&!given)msg(i.why,'bad')});
 function scan(){fetch('/scan').then(r=>r.json()).then(l=>{const s=$('ssid');s.innerHTML='';
  for(const n of l){const o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+(n.secure?' 🔒':'');s.append(o)}
  const o=document.createElement('option');o.value='';o.textContent='Rechercher à nouveau';s.append(o)})}
 $('ssid').onchange=e=>{if(!e.target.value)scan()};scan();
 $('f').onsubmit=async e=>{e.preventDefault();$('go').disabled=true;msg('Connexion…');
  const r=await fetch('/save',{method:'POST',body:new URLSearchParams(new FormData($('f')))}).then(r=>r.json()).catch(()=>({ok:false}));
- if(!r.ok){msg('Remplissez le Wi-Fi, l\'adresse et le code.','bad');$('go').disabled=false;return}
+ if(!r.ok){msg('Choisissez le Wi-Fi et collez la clé de configuration.','bad');$('go').disabled=false;return}
  const t=setInterval(async()=>{const i=await fetch('/info').then(r=>r.json()).catch(()=>null);
   if(!i){clearInterval(t);msg('C\'est fait : le boîtier est relié à Clavarium.','ok');return}
   if(i.job==2){clearInterval(t);msg('C\'est fait : le boîtier est relié à Clavarium.','ok')}

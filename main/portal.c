@@ -11,6 +11,7 @@
 #include "esp_app_desc.h"
 #include "esp_system.h"
 #include "cJSON.h"
+#include "mbedtls/base64.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
@@ -57,12 +58,23 @@ bool wifi_join(const char *ssid, const char *pass, int timeout_ms)
     strlcpy((char *)sta.sta.ssid, ssid, sizeof sta.sta.ssid);
     strlcpy((char *)sta.sta.password, pass, sizeof sta.sta.password);
     sta.sta.threshold.authmode = pass[0] ? WIFI_AUTH_WEP : WIFI_AUTH_OPEN;
+    sta.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+    sta.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+    sta.sta.pmf_cfg.capable = true;
     xSemaphoreTake(join_lock, portMAX_DELAY);
     esp_wifi_disconnect();
-    xEventGroupClearBits(wifi_bits, GOT_IP | FAILED);
+    vTaskDelay(pdMS_TO_TICKS(200));   // the disconnect's own event passes before we listen
     esp_wifi_set_config(WIFI_IF_STA, &sta);
-    esp_wifi_connect();
-    EventBits_t b = xEventGroupWaitBits(wifi_bits, GOT_IP | FAILED, pdFALSE, pdFALSE, pdMS_TO_TICKS(timeout_ms));
+    /* Three tries: a first one often misses a network the scan just saw (the access point of
+       setup shares the radio), and a phone's hotspot takes a moment to come back. */
+    EventBits_t b = 0;
+    TickType_t end = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+    for (int i = 0; i < 3 && !(b & GOT_IP) && xTaskGetTickCount() < end; i++) {
+        xEventGroupClearBits(wifi_bits, GOT_IP | FAILED);
+        esp_wifi_connect();
+        b = xEventGroupWaitBits(wifi_bits, GOT_IP | FAILED, pdFALSE, pdFALSE, end - xTaskGetTickCount());
+        if (!(b & GOT_IP)) vTaskDelay(pdMS_TO_TICKS(1500));
+    }
     xSemaphoreGive(join_lock);
     return b & GOT_IP;
 }
@@ -178,12 +190,42 @@ static void field(const char *body, const char *name, char *out, size_t len)
     }
 }
 
+/* The setup key Clavarium gives (Access > Voice boxes > Copy the key): "GAMBELI-" and base64url
+   of {"u": its address, "r": the room, "c": a pairing code}. One paste instead of three fields. */
+static void setup_key(const char *key)
+{
+    const char *b = strncmp(key, "GAMBELI-", 8) == 0 ? key + 8 : key;
+    char std[400];
+    size_t n = 0;
+    for (; *b && n < sizeof std - 4; b++) {
+        if (*b == ' ' || *b == '\n' || *b == '\r') continue;
+        std[n++] = *b == '-' ? '+' : *b == '_' ? '/' : *b;
+    }
+    while (n % 4) std[n++] = '=';
+    std[n] = 0;
+    unsigned char json[300];
+    size_t len = 0;
+    if (mbedtls_base64_decode(json, sizeof json - 1, &len, (unsigned char *)std, n) != 0) return;
+    json[len] = 0;
+    cJSON *o = cJSON_Parse((char *)json);
+    const char *u = cJSON_GetStringValue(cJSON_GetObjectItem(o, "u"));
+    const char *r = cJSON_GetStringValue(cJSON_GetObjectItem(o, "r"));
+    const char *c = cJSON_GetStringValue(cJSON_GetObjectItem(o, "c"));
+    if (u) strlcpy(conf.url, u, sizeof conf.url);
+    if (r) strlcpy(conf.room, r, sizeof conf.room);
+    if (c) strlcpy(form_code, c, sizeof form_code);
+    cJSON_Delete(o);
+}
+
 static void setup_job(void *arg)
 {
     char why[160] = "";
     if (!wifi_join(form_ssid, form_pass, 20000)) {
-        snprintf(why, sizeof why, last_reason == WIFI_REASON_NO_AP_FOUND
-                 ? "Le Wi-Fi « %s » est introuvable." : "Connexion au Wi-Fi « %s » impossible : vérifiez le mot de passe.", form_ssid);
+        bool password = last_reason == WIFI_REASON_AUTH_FAIL || last_reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT
+                        || last_reason == WIFI_REASON_HANDSHAKE_TIMEOUT || last_reason == WIFI_REASON_MIC_FAILURE;
+        snprintf(why, sizeof why, password ? "Le Wi-Fi « %s » refuse ce mot de passe."
+                 : last_reason == WIFI_REASON_NO_AP_FOUND ? "Le Wi-Fi « %s » ne répond plus (un partage de connexion du téléphone coupé ?)."
+                 : "Connexion au Wi-Fi « %s » impossible (raison %d).", form_ssid, last_reason);
     } else if (pair_box(form_code, why, sizeof why)) {
         strlcpy(conf.ssid, form_ssid, sizeof conf.ssid);
         strlcpy(conf.pass, form_pass, sizeof conf.pass);
@@ -247,6 +289,9 @@ static esp_err_t save(httpd_req_t *r)
     field(body, "url", conf.url, sizeof conf.url);
     field(body, "room", conf.room, sizeof conf.room);
     field(body, "code", form_code, sizeof form_code);
+    char key[400];
+    field(body, "key", key, sizeof key);
+    if (key[0]) setup_key(key);
     memset(body, 0, sizeof body);
     size_t l = strlen(conf.url);
     while (l && conf.url[l - 1] == '/') conf.url[--l] = 0;
