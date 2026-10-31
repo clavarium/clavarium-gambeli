@@ -22,7 +22,7 @@ extern const uint8_t model_end[] asm("_binary_wake_tflite_end");
 
 static const char *TAG = "mww";
 static const int FEATURES = 40;
-static const int CUTOFF = (int)(0.97f * 255);     // from the model's own manifest
+static const int CUTOFF = (int)(0.90f * 255);     // from the model's own manifest (main/wake.json: "Mésange", trained by its owner, 31-10)
 static const int WINDOW = 5;
 static const size_t ARENA = 32 * 1024;
 
