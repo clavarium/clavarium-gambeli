@@ -29,12 +29,11 @@
 #ifndef EP_RELATIVE
 #define EP_RELATIVE 0.3f          // a started sentence: its own voice, not much quieter than it began (a TV behind is)
 #endif
-#define NOBODY_CHUNKS (15 * 50)
 #define LONGEST_CHUNKS (60 * 50)
 
 static float room[ROOM], recent[RECENT], floor_ = ABSOLUTE, at_start = ABSOLUTE;
 static int room_n, room_at, recent_n, recent_at, since;
-static int chunks, quiet, run;
+static int chunks, quiet, run, nobody_chunks = 15 * 50;
 static bool heard;
 static float voice, smooth;   // how loud this speaker is (smoothed peak of the voiced chunks)
 
@@ -57,7 +56,7 @@ static float learn(float rms)
 }
 
 void ep_room(float rms) { learn(rms); }
-void ep_begin(void) { chunks = quiet = run = 0; heard = false; voice = smooth = 0; }
+void ep_begin(int nobody_seconds) { nobody_chunks = nobody_seconds * 50; chunks = quiet = run = 0; heard = false; voice = smooth = 0; }
 bool ep_heard(void) { return heard; }
 float ep_bar(void) { return heard ? fmaxf(at_start * EP_CARRY, voice * EP_RELATIVE) : at_start * EP_START; }
 
@@ -71,7 +70,7 @@ ep_result_t ep_chunk(float rms)
     if (rms >= ep_bar()) { if (++run >= HELD) heard = true; quiet = 0; }
     else { run = 0; quiet++; }
     if (heard && quiet >= EP_SILENCE_CHUNKS) return EP_SILENCE;
-    if (!heard && chunks >= NOBODY_CHUNKS) return EP_NOBODY;
+    if (!heard && chunks >= nobody_chunks) return EP_NOBODY;
     if (chunks >= LONGEST_CHUNKS) return EP_TOO_LONG;
     return EP_GOING;
 }
@@ -81,5 +80,5 @@ void ep_forget(void)
 {
     memset(room, 0, sizeof room); memset(recent, 0, sizeof recent);
     room_n = room_at = recent_n = recent_at = since = 0; floor_ = at_start = ABSOLUTE;
-    ep_begin();
+    ep_begin(15);
 }

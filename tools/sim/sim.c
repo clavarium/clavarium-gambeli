@@ -20,7 +20,7 @@ int main(int argc, char **argv)
             float rms = sqrtf(e / 320);
             if (chunk < idle_chunks) ep_room(rms);
             else {
-                if (chunk == idle_chunks) ep_begin();
+                if (chunk == idle_chunks) ep_begin(15);
                 if (chunk >= idle_chunks + 15) {   // the box skips its "ding" (15 chunks)
                     ep_result_t r = ep_chunk(rms);
                     if (r != EP_GOING) { end = (chunk + 1) / 50.0; why = r == EP_SILENCE ? "silence" : r == EP_NOBODY ? "nobody" : "toolong"; break; }

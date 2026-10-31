@@ -90,8 +90,11 @@ static void error_cue(void)
 
 /* ---- microphone ---- */
 
+static volatile bool follow;   // listening again without a wake word: a short wait for an answer
+
 static void listen_start(const char *reason)
 {
+    follow = !strcmp(reason, "follow");
     speech_stop();
     speech_accept = false;
     sounds_play(SND_DING);
@@ -105,6 +108,7 @@ static void listen_end(const char *reason)
     if (!listening) return;
     listening = false;
     send_simple("listen.end", "reason", reason);
+    if (!strcmp(reason, "nobody")) { set_state(ST_IDLE); return; }   // nobody spoke: back to quiet, no sound
     sounds_play(SND_HEARD);   // a light "got it" before the answer
     set_state(ST_THINK);
 }
@@ -146,7 +150,7 @@ static void mic_task(void *arg)
             ep_room(rms);                                                  // the room is learnt all the time
             continue;
         }
-        if (!was) { was = true; ended = false; skip = 15; ep_begin(); }
+        if (!was) { was = true; ended = false; skip = 15; ep_begin(follow ? 6 : 15); }
         if (skip > 0) { skip--; continue; }                                 // the "ding", and what the codec held meanwhile
         if (ended) continue;                                                // the main task closes the sentence
         link_send_audio(pcm, n);
@@ -154,7 +158,7 @@ static void mic_task(void *arg)
         for (int i = 0; i < n; i++) sum += (double)pcm[i] * pcm[i];
         float rms = sqrtf(sum / n);
         ep_result_t r = ep_chunk(rms);
-        if (r != EP_GOING) { ended = true; post_event(EV_LISTEN_END, r == EP_TOO_LONG, NULL); }
+        if (r != EP_GOING) { ended = true; post_event(EV_LISTEN_END, r == EP_TOO_LONG ? 1 : r == EP_NOBODY ? 2 : 0, NULL); }
     }
 }
 
@@ -423,7 +427,7 @@ void app_main(void)
                 if (!muted && !listening && state != ST_OFFLINE && state != ST_UPDATE && state != ST_ALERT) listen_start("wake");
                 else if (state == ST_OFFLINE) error_cue();   // heard, but not connected yet: say so rather than nothing
                 break;
-            case EV_LISTEN_END: listen_end(ev.arg ? "timeout" : "silence"); break;
+            case EV_LISTEN_END: listen_end(ev.arg == 1 ? "timeout" : ev.arg == 2 ? "nobody" : "silence"); break;
             case EV_TICK: if (ev.arg == 1 && state == ST_UPDATE) set_state(ST_IDLE); break;
             default: break;
             }
