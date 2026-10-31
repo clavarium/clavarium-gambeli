@@ -7,7 +7,7 @@
 #define BOX_RATE 16000            // PCM everywhere: 16 kHz, 16-bit, mono
 #define BOX_CHUNK 320             // 20 ms of samples
 #define BOX_TYPE "voice-box/1"
-#define BOX_CAPS "[\"mic\",\"speaker\",\"led-ring:7\",\"button\",\"mute\",\"wifi\",\"ble\",\"wake:jarvis\"]"
+#define BOX_CAPS "[\"mic\",\"speaker\",\"led-ring:7\",\"button\",\"mute\",\"wifi\",\"ble\",\"wake:hey-jarvis\"]"
 
 // board.c: codecs, amplifier, keys
 enum { KEY_MAIN = 1, KEY_MUTE = 2, KEY_THIRD = 4 };
@@ -62,9 +62,9 @@ extern volatile bool speech_accept;                  // binary frames are played
 // improv.c: Wi-Fi (and pairing) over the USB line, from the flash page
 void improv_start(void);
 
-// wake.c: the wake word, heard on the chip
-bool wake_start(void);
-void wake_feed(const int16_t *four, int n);          // n samples of the four channels
+// mww.cc: the wake word, heard on the chip (microWakeWord)
+bool mww_start(void);
+void mww_feed(const int16_t *pcm, int n);            // mono, 16 kHz
 
 // ota.c
 bool ota_install(const char *url, const char *sha256, char *detail, size_t detail_len);

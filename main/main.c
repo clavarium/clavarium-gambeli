@@ -104,6 +104,8 @@ static void mic_task(void *arg)
 {
     static int16_t pcm[BOX_CHUNK];
     static int16_t four[BOX_CHUNK * 4];
+    static TickType_t last_knock;
+    static float quiet_rms;
     bool was = false, ended = false, heard = false;
     int skip = 0, chunks = 0, quiet = 0;
     float floor = 0;
@@ -111,8 +113,24 @@ static void mic_task(void *arg)
         if (muted) { was = false; vTaskDelay(pdMS_TO_TICKS(20)); continue; }   // muted: the microphone is not read at all
         int n = board_mic_read_raw(four, BOX_CHUNK);
         if (n <= 0) continue;
-        if (!listening) { was = false; wake_feed(four, n); continue; }      // only the wake word hears it, on the chip
-        for (int i = 0; i < n; i++) pcm[i] = four[4 * i + 1];              // the first microphone, for the sentence
+        for (int i = 0; i < n; i++) pcm[i] = four[4 * i + 1];              // the first microphone
+        if (!listening) {
+            was = false;
+            mww_feed(pcm, n);                                              // only the wake word hears it, on the chip
+            /* Knock knock: two short, sharp sounds 0.15 to 0.7 s apart, the box quiet -- as a press. */
+            int peak = 0; double e = 0;
+            for (int i = 0; i < n; i++) { int a = abs(pcm[i]); if (a > peak) peak = a; e += (double)pcm[i] * pcm[i]; }
+            float rms = sqrtf(e / n);
+            TickType_t now = xTaskGetTickCount();
+            bool sharp = peak > 9000 && peak > rms * 5 && quiet_rms < 900 && speech_idle();
+            if (sharp && now - last_knock > pdMS_TO_TICKS(120)) {
+                TickType_t gap = now - last_knock;
+                if (gap >= pdMS_TO_TICKS(150) && gap <= pdMS_TO_TICKS(700)) { post_event(EV_KEY_SHORT, KEY_MAIN, NULL); last_knock = 0; }
+                else last_knock = now;
+            }
+            quiet_rms = quiet_rms * 0.9f + rms * 0.1f;
+            continue;
+        }
         if (!was) { was = true; ended = false; heard = false; skip = 15; chunks = 0; quiet = 0; floor = 0; }
         if (skip > 0) { skip--; continue; }                                 // the "ding", and what the codec held meanwhile
         if (ended) continue;                                                // the main task closes the sentence
@@ -362,7 +380,7 @@ void app_main(void)
     xTaskCreate(mic_task, "mic", 6144, NULL, 5, NULL);
     xTaskCreate(keys_task, "keys", 3072, NULL, 4, NULL);
     status_start();
-    wake_start();
+    mww_start();
 
     for (;;) {
         box_ev_t ev;

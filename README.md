@@ -66,7 +66,7 @@ npm test
 
 ## Not yet
 
-- A wake word of its own name: "Jarvis" for now (Espressif WakeNet9), heard on the chip.
+- The wake word: microWakeWord (Home Assistant), "Hey Jarvis" for now (model: esphome/micro-wake-word-models, Apache-2.0), built into the program; a double knock on the box is a press.
 - Secure Boot, so that an update must be signed: needs a signing key held by the owner.
 - NVS encryption (flash encryption).
 
