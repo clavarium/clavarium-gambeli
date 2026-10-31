@@ -13,7 +13,7 @@
 
 static esp_err_t page(httpd_req_t *r)
 {
-    static char html[1600];
+    static char html[2000];
     esp_netif_ip_info_t ip = {0};
     esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_STA_DEF"), &ip);
     const char *p = link_problem();
@@ -26,6 +26,10 @@ static esp_err_t page(httpd_req_t *r)
              conf.url, link_up() ? "connected" : "not connected",
              p[0] ? "<p>Last problem: <code>" : "", p, p[0] ? "</code></p>" : "",
              link_tries(), esp_timer_get_time() / 60000000LL);
+    size_t at = strlen(html);
+    at += snprintf(html + at, sizeof html - at, "<p>Last sharp sounds (peak / level / background):");
+    for (int i = 0; i < 6 && at < sizeof html - 40; i++) at += snprintf(html + at, sizeof html - at, " %d/%d/%d", knock_seen(i, 0), knock_seen(i, 1), knock_seen(i, 2));
+    snprintf(html + at, sizeof html - at, "</p>");
     httpd_resp_set_type(r, "text/html; charset=utf-8");
     return httpd_resp_sendstr(r, html);
 }

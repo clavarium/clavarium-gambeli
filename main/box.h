@@ -56,7 +56,9 @@ const char *link_problem(void);                      // the last reason it could
 int  link_tries(void);
 bool link_up(void);
 const char *link_was(void);                          // what kept it from Clavarium before this connection
-void status_start(void);                             // a page of its state on its own address, and its name on the network
+void status_start(void);
+void knock_note(int peak, int rms, int quiet);
+int knock_seen(int i, int what);                     // i: 0 the newest; what: 0 peak, 1 rms, 2 background                             // a page of its state on its own address, and its name on the network
 extern volatile bool speech_accept;                  // binary frames are played only while set
 
 // improv.c: Wi-Fi (and pairing) over the USB line, from the flash page

@@ -23,7 +23,11 @@ static bool speak_ending;
 static char alert_id[48];
 static int alert_chimes;
 static TickType_t state_since, last_ping;
-static char pending_ack[160];   // an ack to send once the link is back (after wifi.join)
+static char pending_ack[160];
+/* The last sharp sounds heard (peak, rms, background), shown on the status page to set the knock. */
+static int knocks[6][3]; static int knock_at;
+void knock_note(int peak, int rms, int quiet) { knocks[knock_at][0] = peak; knocks[knock_at][1] = rms; knocks[knock_at][2] = quiet; knock_at = (knock_at + 1) % 6; }
+int knock_seen(int i, int what) { return knocks[(knock_at + 5 - i) % 6][what]; }   // an ack to send once the link is back (after wifi.join)
 
 void post_event(ev_type_t type, int arg, char *text)
 {
@@ -122,7 +126,8 @@ static void mic_task(void *arg)
             for (int i = 0; i < n; i++) { int a = abs(pcm[i]); if (a > peak) peak = a; e += (double)pcm[i] * pcm[i]; }
             float rms = sqrtf(e / n);
             TickType_t now = xTaskGetTickCount();
-            bool sharp = peak > 9000 && peak > rms * 5 && quiet_rms < 900 && speech_idle();
+            bool sharp = peak > 3500 && peak > rms * 3.5f && peak > quiet_rms * 6 && speech_idle();
+            if (peak > 2500 && peak > rms * 3) knock_note(peak, (int)rms, (int)quiet_rms);   // for the status page: what a knock looks like here
             if (sharp && now - last_knock > pdMS_TO_TICKS(120)) {
                 TickType_t gap = now - last_knock;
                 if (gap >= pdMS_TO_TICKS(150) && gap <= pdMS_TO_TICKS(700)) { post_event(EV_KEY_SHORT, KEY_MAIN, NULL); last_knock = 0; }
@@ -140,8 +145,8 @@ static void mic_task(void *arg)
         float rms = sqrtf(sum / n);
         if (chunks < 10) floor = (floor * chunks + rms) / (chunks + 1);
         chunks++;
-        if (rms > fmaxf(500, floor * 3)) { heard = true; quiet = 0; } else quiet++;
-        if (heard && quiet >= 40) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }          // 0.8 s of silence
+        if (rms > fmaxf(350, floor * 2.2f)) { heard = true; quiet = 0; } else quiet++;   // a softer voice still counts
+        if (heard && quiet >= 70) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }          // 1.4 s of silence: the end of a sentence, not a breath (0.8 s cut people short)
         else if (chunks >= 15 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 1, NULL); } // 15 s at most
     }
 }
