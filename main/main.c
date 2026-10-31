@@ -116,7 +116,7 @@ static void listen_end(const char *reason)
 static float room[ROOM], recent[RECENT], room_floor = 130;
 static int room_n, room_at, recent_n, recent_at, room_since;
 static int by_value(const void *a, const void *b) { float x = *(const float *)a, y = *(const float *)b; return (x > y) - (x < y); }
-static bool is_speech(float rms)
+static bool is_speech(float rms, bool started)
 {
     static float sorted[ROOM];
     room[room_at] = rms; room_at = (room_at + 1) % ROOM; if (room_n < ROOM) room_n++;
@@ -129,7 +129,10 @@ static bool is_speech(float rms)
     }
     float steady = 0;
     if (recent_n >= RECENT) { steady = recent[0]; for (int i = 1; i < RECENT; i++) if (recent[i] < steady) steady = recent[i]; }
-    return rms >= fmaxf(fmaxf(room_floor, steady), 130) * 3;
+    /* The box is further from a mouth than a phone is: 2.5 times to start, and once a sentence has started,
+       1.6 times the room carries it on (3 times cut a voice mid-sentence, 31-10). */
+    if (started) return rms >= fmaxf(room_floor, 130) * 1.6f;
+    return rms >= fmaxf(fmaxf(room_floor, steady), 130) * 2.5f;
 }
 
 static void mic_task(void *arg)
@@ -166,7 +169,7 @@ static void mic_task(void *arg)
                 else last_knock = now;
             }
             quiet_rms = quiet_rms * 0.9f + rms * 0.1f;
-            is_speech(rms);                                                // the room is learnt all the time
+            is_speech(rms, false);                                         // the room is learnt all the time
             continue;
         }
         if (!was) { was = true; ended = false; heard = false; skip = 15; chunks = 0; quiet = 0; run = 0; }
@@ -177,10 +180,10 @@ static void mic_task(void *arg)
         for (int i = 0; i < n; i++) sum += (double)pcm[i] * pcm[i];
         float rms = sqrtf(sum / n);
         chunks++;
-        if (is_speech(rms)) { if (++run >= 8) heard = true; quiet = 0; }  // 160 ms held: a syllable
+        if (is_speech(rms, heard)) { if (++run >= 8) heard = true; quiet = 0; }  // 160 ms held: a syllable
         else { run = 0; quiet++; }
         if (heard && quiet >= 100) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }         // 2 s of silence (1.4 s still cut people mid-thought, 31-10)
-        else if (!heard && chunks >= 8 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }  // 8 s and no voice: nobody speaks
+        else if (!heard && chunks >= 15 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }  // 15 s and no voice: nobody speaks
         else if (chunks >= 60 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 1, NULL); } // 60 s at most (15 s cut a story short, 31-10)
     }
 }
