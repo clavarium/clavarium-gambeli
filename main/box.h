@@ -19,7 +19,7 @@ void board_amp(bool on);
 uint32_t board_keys(void);                           // KEY_* pressed now
 
 // leds.c
-typedef enum { LED_OFF, LED_SOLID, LED_PULSE, LED_SPIN, LED_BREATHE, LED_BLINK2, LED_DOT, LED_OFFLINE } led_pattern_t;
+typedef enum { LED_OFF, LED_SOLID, LED_PULSE, LED_SPIN, LED_BREATHE, LED_BLINK2, LED_DOT, LED_OFFLINE, LED_ALERT } led_pattern_t;
 void leds_init(void);
 void leds_set(led_pattern_t pattern, uint32_t rgb);  // 0xRRGGBB
 
@@ -51,6 +51,11 @@ void link_start(void);
 bool link_send_text(const char *json);
 bool link_send_audio(const int16_t *pcm, int samples);
 int  link_rssi(void);
+const char *link_problem(void);                      // the last reason it could not reach Clavarium, or ""
+int  link_tries(void);
+bool link_up(void);
+const char *link_was(void);                          // what kept it from Clavarium before this connection
+void status_start(void);                             // a page of its state on its own address, and its name on the network
 extern volatile bool speech_accept;                  // binary frames are played only while set
 
 // improv.c: Wi-Fi (and pairing) over the USB line, from the flash page

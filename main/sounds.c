@@ -81,11 +81,11 @@ static void rest(int ms)
 void sounds_play(sound_t s)
 {
     switch (s) {
-    case SND_DING:  note(880, 1320, 180, 0.35f); break;                              // rising
+    case SND_DING:  note(880, 1320, 180, 0.22f); break;                              // rising
     case SND_TIC:   note(1500, 1400, 45, 0.2f); break;                               // soft tick
-    case SND_ERROR: note(660, 640, 160, 0.35f); note(440, 420, 260, 0.35f); break;   // two notes down
+    case SND_ERROR: note(660, 640, 160, 0.16f); note(523, 510, 240, 0.14f); break;   // soft: an alert sounds, an error only says so   // two notes down
     case SND_CHIME: note(1047, 1047, 300, 0.35f); note(784, 784, 300, 0.3f); note(1047, 1047, 450, 0.3f); rest(200); break;
     case SND_CLICK: note(2400, 2000, 15, 0.25f); break;
-    case SND_DONE:  note(784, 784, 120, 0.3f); note(1175, 1175, 220, 0.3f); break;
+    case SND_DONE:  note(784, 784, 120, 0.18f); note(1175, 1175, 220, 0.18f); break;
     }
 }

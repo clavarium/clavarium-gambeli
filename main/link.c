@@ -20,6 +20,9 @@ static EventGroupHandle_t bits;
 volatile bool speech_accept;
 static volatile bool up;
 static char *text;        // a text message being reassembled
+static char problem[160]; // why the last try failed, for the status page
+static char was[160];     // the problem before this connection: said to Clavarium in hello
+static int tries;
 static size_t text_len;
 
 static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *ev)
@@ -28,6 +31,8 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *ev)
     switch (id) {
     case WEBSOCKET_EVENT_CONNECTED:
         up = true;
+        strlcpy(was, problem, sizeof was);
+        problem[0] = 0;
         xEventGroupSetBits(bits, WAS_UP);
         post_event(EV_LINK_UP, 0, NULL);
         break;
@@ -39,6 +44,11 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *ev)
         break;
     case WEBSOCKET_EVENT_ERROR:
         if (d->error_handle.esp_ws_handshake_status_code == 401) xEventGroupSetBits(bits, REFUSED);
+        snprintf(problem, sizeof problem, "error type %d, http %d, tls %s (%d), errno %d",
+                 d->error_handle.error_type, d->error_handle.esp_ws_handshake_status_code,
+                 esp_err_to_name(d->error_handle.esp_tls_last_esp_err), d->error_handle.esp_tls_stack_err,
+                 d->error_handle.esp_transport_sock_errno);
+        ESP_LOGW(TAG, "%s", problem);
         break;
     case WEBSOCKET_EVENT_DATA:
         if (d->op_code == 0x2 || (d->op_code == 0x0 && !text)) {
@@ -66,7 +76,8 @@ static void run(void *arg)
     snprintf(auth, sizeof auth, "Authorization: Bearer %s\r\n", conf.key);
     int wait = 1;
     for (;;) {
-        if (!wifi_connected()) wifi_join(conf.ssid, conf.pass, 15000);
+        tries++;
+        if (!wifi_connected() && !wifi_join(conf.ssid, conf.pass, 15000)) snprintf(problem, sizeof problem, "Wi-Fi \"%s\" not joined", conf.ssid);
         if (wifi_connected()) {
             esp_websocket_client_config_t c = {
                 .uri = url, .headers = auth, .crt_bundle_attach = esp_crt_bundle_attach,
@@ -118,3 +129,8 @@ int link_rssi(void)
     wifi_ap_record_t ap;
     return esp_wifi_sta_get_ap_info(&ap) == ESP_OK ? ap.rssi : 0;
 }
+
+const char *link_problem(void) { return problem; }
+int link_tries(void) { return tries; }
+bool link_up(void) { return up; }
+const char *link_was(void) { return was; }

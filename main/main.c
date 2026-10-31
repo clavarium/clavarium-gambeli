@@ -36,14 +36,14 @@ static void set_state(state_t s)
     state = s;
     state_since = xTaskGetTickCount();
     switch (s) {
-    case ST_OFFLINE: leds_set(LED_OFFLINE, 0xffa000); break;
+    case ST_OFFLINE: leds_set(LED_OFFLINE, 0xff9020); break;
     case ST_IDLE:    leds_set(muted ? LED_DOT : LED_OFF, 0xff0000); break;
-    case ST_LISTEN:  leds_set(LED_SOLID, 0x0050ff); break;
-    case ST_THINK:   leds_set(LED_SPIN, 0x0050ff); break;
+    case ST_LISTEN:  leds_set(LED_SOLID, 0x2060ff); break;
+    case ST_THINK:   leds_set(LED_SPIN, 0x3070ff); break;
     case ST_SPEAK:   leds_set(LED_BREATHE, 0xffffff); break;
-    case ST_ALERT:   leds_set(LED_PULSE, 0xff6000); break;
+    case ST_ALERT:   leds_set(LED_ALERT, 0xff2000); break;
     case ST_UPDATE:  leds_set(LED_SPIN, 0x9000ff); break;
-    case ST_ERROR:   leds_set(LED_BLINK2, 0xff0000); break;
+    case ST_ERROR:   leds_set(LED_BLINK2, 0xff3020); break;
     }
 }
 
@@ -162,6 +162,8 @@ static void hello(void)
     cJSON_AddNumberToObject(o, "rssi", link_rssi());
     cJSON_AddNumberToObject(o, "volume", conf.volume);
     cJSON_AddBoolToObject(o, "muted", muted);
+    if (link_was()[0]) cJSON_AddStringToObject(o, "problem", link_was());   // why it was offline: for the server's log
+    cJSON_AddNumberToObject(o, "tries", link_tries());
     send_obj(o);
 }
 
@@ -359,6 +361,7 @@ void app_main(void)
     link_start();
     xTaskCreate(mic_task, "mic", 6144, NULL, 7, NULL);
     xTaskCreate(keys_task, "keys", 3072, NULL, 4, NULL);
+    status_start();
 
     for (;;) {
         box_ev_t ev;

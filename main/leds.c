@@ -25,20 +25,22 @@ static void animate(void *arg)
         uint32_t c = color;
         for (int i = 0; i < LED_COUNT; i++) {
             float k = 0;
+            /* Soft by default (an assistant in a room, not a warning light): only an alert is bright. */
             switch (pattern) {
             case LED_OFF: k = 0; break;
-            case LED_SOLID: k = 0.5f; break;
-            case LED_PULSE: k = 0.05f + 0.45f * (0.5f + 0.5f * sinf(t * 2.1f)); break;            // slow
-            case LED_BREATHE: k = 0.1f + 0.35f * (0.5f + 0.5f * sinf(t * 4.0f)); break;
-            case LED_SPIN: {
-                float head = fmodf(t * 10.0f, LED_COUNT);
+            case LED_SOLID: k = 0.22f; break;
+            case LED_PULSE: k = 0.02f + 0.18f * (0.5f + 0.5f * sinf(t * 1.3f)); break;          // setup: slow, dim
+            case LED_BREATHE: k = 0.04f + 0.14f * (0.5f + 0.5f * sinf(t * 2.2f)); break;        // speaking
+            case LED_SPIN: {                                                                     // thinking: a slow, soft turn
+                float head = fmodf(t * 3.5f, LED_COUNT);
                 float d = fmodf(head - i + LED_COUNT, LED_COUNT);
-                k = d < 3 ? 0.5f * (1 - d / 3) : 0;
+                k = d < 4 ? 0.22f * (1 - d / 4) : 0;
                 break;
             }
-            case LED_BLINK2: k = (t < 1.2f && fmodf(t, 0.6f) < 0.3f) ? 0.6f : 0; break;
-            case LED_DOT: k = i == 0 ? 0.25f : 0; break;
-            case LED_OFFLINE: k = fmodf(t, 5.0f) < 0.25f ? 0.4f : 0; break;
+            case LED_BLINK2: k = t < 1.6f ? 0.18f * (0.5f - 0.5f * cosf(t * 2 * (float)M_PI / 0.8f)) : 0; break;   // error: two soft swells
+            case LED_DOT: k = i == 0 ? 0.12f : 0; break;
+            case LED_OFFLINE: k = i % 2 ? 0 : 0.015f + 0.05f * (0.5f + 0.5f * sinf(t * 0.7f)); break;            // a faint, slow glow
+            case LED_ALERT: k = 0.15f + 0.65f * (0.5f + 0.5f * sinf(t * 5.0f)); break;          // a real alert: bright, seen across the room
             }
             put(i, c, k);
         }

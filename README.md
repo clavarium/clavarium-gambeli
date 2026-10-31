@@ -18,8 +18,8 @@ own examples.
 | Thinking | soft tick | blue, turning |
 | Speaking | the answer | white, breathing |
 | Error | two notes down | red, two blinks |
-| Alert | chime, 3 times at most | orange until a press |
-| Offline | — | amber blink every 5 s |
+| Alert | chime, 3 times at most | bright red until a press: the only bright light |
+| Offline | — | a faint amber glow, slow |
 | Updating | — | violet, turning |
 
 Keys: the first one listens (and stops an answer to listen again); held 5 s it opens setup. The
@@ -69,3 +69,8 @@ npm test
 - A wake word (esp-sr): only the button for now.
 - Secure Boot, so that an update must be signed: needs a signing key held by the owner.
 - NVS encryption (flash encryption).
+
+## Its state, from a phone
+
+On the same Wi-Fi, `http://gambeli-XXXX.local/` (XXXX as in its setup Wi-Fi) shows its firmware, its Wi-Fi
+and signal, whether it reaches Clavarium, and if not, the last reason. No key, no password on it.
