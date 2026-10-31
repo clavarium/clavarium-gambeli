@@ -15,16 +15,19 @@ static volatile uint32_t since;   // tick when the pattern was set
 
 static float shown[LED_COUNT][3];
 
-/* Lights rise gently (a sudden switch-on was harsh, 31-10) and fall as asked: the fade-out was liked. */
-static void put(int i, uint32_t rgb, float k)
+/* A new pattern blends in over half a second (a sudden switch-on was harsh, 31-10); after that the
+   pattern itself is drawn exactly, so a pulse stays even (smoothing it all the time made it irregular). */
+static void put(int i, uint32_t rgb, float k, float t)
 {
     float want[3] = { ((rgb >> 16) & 255) * k, ((rgb >> 8) & 255) * k, (rgb & 255) * k };
-    for (int j = 0; j < 3; j++) shown[i][j] = want[j] > shown[i][j] ? shown[i][j] + (want[j] - shown[i][j]) * 0.1f : want[j];
+    float a = t < 0.5f ? 0.15f : 1.0f;
+    for (int j = 0; j < 3; j++) shown[i][j] += (want[j] - shown[i][j]) * a;
     led_strip_set_pixel(strip, i, (uint32_t)shown[i][0], (uint32_t)shown[i][1], (uint32_t)shown[i][2]);
 }
 
 static void animate(void *arg)
 {
+    TickType_t wake = xTaskGetTickCount();
     for (;;) {
         float t = (xTaskGetTickCount() - since) * portTICK_PERIOD_MS / 1000.0f;
         uint32_t c = color;
@@ -47,10 +50,10 @@ static void animate(void *arg)
             case LED_OFFLINE: k = i % 2 ? 0 : 0.015f + 0.05f * (0.5f + 0.5f * sinf(t * 0.7f)); break;            // a faint, slow glow
             case LED_ALERT: k = 0.15f + 0.65f * (0.5f + 0.5f * sinf(t * 5.0f)); break;          // a real alert: bright, seen across the room
             }
-            put(i, c, k);
+            put(i, c, k, t);
         }
         led_strip_refresh(strip);
-        vTaskDelay(pdMS_TO_TICKS(40));
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(40));   // a steady 25 frames a second, whatever else runs
     }
 }
 
@@ -60,7 +63,7 @@ void leds_init(void)
     led_strip_rmt_config_t rmt = { .resolution_hz = 10 * 1000 * 1000 };
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&cfg, &rmt, &strip));
     led_strip_clear(strip);
-    xTaskCreate(animate, "leds", 3072, NULL, 3, NULL);
+    xTaskCreatePinnedToCore(animate, "leds", 3072, NULL, 8, NULL, 1);   // above the wake word: its bursts made the lights stutter
 }
 
 void leds_set(led_pattern_t p, uint32_t rgb)
