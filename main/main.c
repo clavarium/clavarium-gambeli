@@ -91,6 +91,7 @@ static void error_cue(void)
 /* ---- microphone ---- */
 
 static volatile bool follow;
+static volatile bool own_voice;   // what plays is its own voice (speak.start kind voice), not a stream
 /* A LONG RECORDING (a meeting): asked by Clavarium, started once the box has finished speaking, the whole
    sound sent until the button or the wake word stops it. A slow red glow while it lasts. */
 static volatile bool recording, record_pending;
@@ -154,7 +155,7 @@ static void mic_task(void *arg)
             /* After a sentence, or once the box has finished speaking: the wake word starts afresh. */
             static bool busy_before;
             bool busy = !speech_idle();
-            mww_strict(busy);
+            mww_strict(busy ? (own_voice ? 2 : 1) : 0);
             if (was || (busy_before && !busy)) mww_reset();
             busy_before = busy;
             was = false;
@@ -294,6 +295,8 @@ static void on_message(char *text)
         /* THE BOX'S WORDS, sound and light together (agreed 31-10): rising + steady blue, I listen; two light
            notes + turning blue, got it; two falling notes + lights out, I stopped listening; a small bell +
            warm breathing, a message comes (said of itself, not an answer). */
+        const char *kind = cJSON_GetStringValue(cJSON_GetObjectItem(m, "kind"));
+        own_voice = !kind || strcmp(kind, "stream") != 0;
         if (!listening && state == ST_IDLE) sounds_play(SND_BELL);
         if (!listening) set_state(ST_SPEAK);   // someone is speaking: it waits for the end of their sentence
     } else if (!strcmp(t, "speak.end")) {

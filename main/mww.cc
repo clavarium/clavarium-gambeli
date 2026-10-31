@@ -36,7 +36,10 @@ static int last, stride_step, ignore;
    (31-10). Then only a near-certain wake word counts; the button always works. */
 static volatile int cutoff = CUTOFF_QUIET;
 static const int CUTOFF_OWN_SOUND = (int)(0.99f * 255);
-extern "C" void mww_strict(bool strict) { cutoff = strict ? CUTOFF_OWN_SOUND : CUTOFF_QUIET; }
+/* 0: quiet, its own cutoff; 1: a stream plays (the radio), near-certain only; 2: its own voice speaks, deaf
+   to the word altogether -- its voice is close to the voices the model learnt from (31-10 tests: a synthetic
+   sentence woke it 7 times in 40). The button always works. */
+extern "C" void mww_strict(int level) { cutoff = level == 2 ? 255 * 2 : level == 1 ? CUTOFF_OWN_SOUND : CUTOFF_QUIET; }
 static bool ready;
 
 static bool add_ops()
