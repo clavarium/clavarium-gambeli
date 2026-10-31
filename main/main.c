@@ -154,6 +154,7 @@ static void mic_task(void *arg)
             /* After a sentence, or once the box has finished speaking: the wake word starts afresh. */
             static bool busy_before;
             bool busy = !speech_idle();
+            mww_strict(busy);
             if (was || (busy_before && !busy)) mww_reset();
             busy_before = busy;
             was = false;

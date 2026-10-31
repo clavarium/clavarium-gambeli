@@ -22,7 +22,7 @@ extern const uint8_t model_end[] asm("_binary_wake_tflite_end");
 
 static const char *TAG = "mww";
 static const int FEATURES = 40;
-static const int CUTOFF = (int)(0.90f * 255);     // from the model's own manifest (main/wake.json: "Mésange", trained by its owner, 31-10)
+static const int CUTOFF_QUIET = (int)(0.90f * 255);     // from the model's own manifest (main/wake.json: "Mésange", trained by its owner, 31-10)
 static const int WINDOW = 5;
 static const size_t ARENA = 32 * 1024;
 
@@ -32,6 +32,11 @@ static tflite::MicroMutableOpResolver<20> ops;
 static tflite::MicroInterpreter *interpreter;
 static uint8_t recent[WINDOW];
 static int last, stride_step, ignore;
+/* While the box itself speaks or plays, its own sound reaches the microphone: "Wi-Fi" said by it woke it
+   (31-10). Then only a near-certain wake word counts; the button always works. */
+static volatile int cutoff = CUTOFF_QUIET;
+static const int CUTOFF_OWN_SOUND = (int)(0.99f * 255);
+extern "C" void mww_strict(bool strict) { cutoff = strict ? CUTOFF_OWN_SOUND : CUTOFF_QUIET; }
 static bool ready;
 
 static bool add_ops()
@@ -92,7 +97,7 @@ static void infer(const int8_t *features)
     if (ignore < 0) { ignore++; return; }
     int sum = 0;
     for (int i = 0; i < WINDOW; i++) sum += recent[i];
-    if (sum > CUTOFF * WINDOW) {
+    if (sum > cutoff * WINDOW) {
         ESP_LOGI(TAG, "wake word (%d)", sum / WINDOW);
         memset(recent, 0, sizeof recent);
         ignore = -WINDOW * 3;   // not twice for one word
