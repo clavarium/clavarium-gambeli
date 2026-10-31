@@ -130,9 +130,11 @@ static bool is_speech(float rms, bool started)
     float steady = 0;
     if (recent_n >= RECENT) { steady = recent[0]; for (int i = 1; i < RECENT; i++) if (recent[i] < steady) steady = recent[i]; }
     /* The box is further from a mouth than a phone is: 2.5 times to start, and once a sentence has started,
-       1.6 times the room carries it on (3 times cut a voice mid-sentence, 31-10). */
-    if (started) return rms >= fmaxf(room_floor, 130) * 1.6f;
-    return rms >= fmaxf(fmaxf(room_floor, steady), 130) * 2.5f;
+       1.8 times the room as it was then carries it on (3 times cut a voice mid-sentence, 31-10). */
+    static float at_start = 130;   // the room, steady noise (a TV) included, when the sentence began
+    if (!started) at_start = fmaxf(fmaxf(room_floor, steady), 130);
+    if (started) return rms >= at_start * 1.8f;   // 1.6 times the quiet room alone: a TV kept it listening (31-10)
+    return rms >= at_start * 2.5f;
 }
 
 static void mic_task(void *arg)
