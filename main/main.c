@@ -440,6 +440,7 @@ void app_main(void)
         if (xQueueReceive(events, &ev, pdMS_TO_TICKS(100)) == pdTRUE) {
             switch (ev.type) {
             case EV_LINK_UP:
+                leds_clock();
                 hello();
                 last_ping = xTaskGetTickCount();
                 if (pending_ack[0]) {

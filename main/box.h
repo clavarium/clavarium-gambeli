@@ -22,6 +22,7 @@ uint32_t board_keys(void);                           // KEY_* pressed now
 // leds.c
 typedef enum { LED_OFF, LED_SOLID, LED_PULSE, LED_SPIN, LED_BREATHE, LED_BLINK2, LED_DOT, LED_OFFLINE, LED_ALERT } led_pattern_t;
 void leds_init(void);
+void leds_clock(void);                                // once on the Wi-Fi: the clock, for the lights' strength by the hour
 void leds_set(led_pattern_t pattern, uint32_t rgb);  // 0xRRGGBB
 
 // sounds.c: short cues, synthesised, never fetched

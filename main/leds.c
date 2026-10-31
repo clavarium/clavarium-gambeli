@@ -13,8 +13,32 @@ static volatile led_pattern_t pattern = LED_OFF;
 static volatile uint32_t color;
 static volatile uint32_t since;   // tick when the pattern was set
 
-/* Every light but an alert at half its former strength: at night it lit half the room (31-10). */
-#define DIM 0.45f
+#include "esp_sntp.h"
+#include <time.h>
+/* HOW BRIGHT, BY THE HOUR (Paris time, from the network's clock): seen by day, barely at night -- at night it
+   lit half the room (31-10). Fades over an hour at both ends. An alert is always full. Before the clock is
+   known: the day's level. */
+#define DAY 0.45f
+#define NIGHT 0.06f
+static float dim(void)
+{
+    time_t now = time(NULL);
+    if (now < 1700000000) return DAY;
+    struct tm t; localtime_r(&now, &t);
+    float h = t.tm_hour + t.tm_min / 60.0f;
+    if (h >= 22.5f || h < 6.5f) return NIGHT;
+    if (h >= 21.5f) return DAY + (NIGHT - DAY) * (h - 21.5f);   // 21:30 -> 22:30, down
+    if (h < 7.5f) return NIGHT + (DAY - NIGHT) * (h - 6.5f);     // 06:30 -> 07:30, up
+    return DAY;
+}
+void leds_clock(void)
+{
+    setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1); tzset();
+    if (esp_sntp_enabled()) return;
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org");
+    esp_sntp_init();
+}
 static float shown[LED_COUNT][3];      // what is lit now, in fractions of a level
 static float from[LED_COUNT][3];       // what was lit when the pattern changed
 static float carry[LED_COUNT][3];      // the fraction not shown yet (dithering: smooth ramps even at low light)
@@ -44,6 +68,7 @@ static void animate(void *arg)
         if (changed) { changed = false; for (int i = 0; i < LED_COUNT; i++) for (int j = 0; j < 3; j++) from[i][j] = shown[i][j]; }
         float t = (xTaskGetTickCount() - since) * portTICK_PERIOD_MS / 1000.0f;
         uint32_t c = color;
+        float level = dim();
         for (int i = 0; i < LED_COUNT; i++) {
             float k = 0;
             /* Soft by default (an assistant in a room, not a warning light): only an alert is bright. */
@@ -64,7 +89,7 @@ static void animate(void *arg)
             case LED_OFFLINE: k = i % 2 ? 0 : 0.015f + 0.05f * (0.5f + 0.5f * sinf(t * 0.7f)); break;            // a faint, slow glow
             case LED_ALERT: k = 0.15f + 0.65f * (0.5f + 0.5f * sinf(t * 5.0f)); break;          // a real alert: bright, seen across the room
             }
-            put(i, c, k * (pattern == LED_ALERT ? 1.0f : DIM), t);
+            put(i, c, k * (pattern == LED_ALERT ? 1.0f : level), t);
         }
         led_strip_refresh(strip);
         vTaskDelayUntil(&wake, pdMS_TO_TICKS(20));   // a steady 50 frames a second, whatever else runs
