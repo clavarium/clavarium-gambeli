@@ -9,7 +9,8 @@
 #include <string.h>
 
 #define STREAM_BYTES (512 * 1024)  // 16 s of speech ahead: a whole answer, without the link waiting on the speaker
-static StreamBufferHandle_t stream;
+static StreamBufferHandle_t stream;   // speech from Clavarium: held while someone speaks to the box
+static StreamBufferHandle_t cues;     // the box's own short sounds: always played at once
 static volatile bool playing;
 
 static void player(void *arg)
@@ -17,7 +18,11 @@ static void player(void *arg)
     static int16_t buf[BOX_CHUNK];
     int idle = 0;
     for (;;) {
-        size_t got = xStreamBufferReceive(stream, buf, sizeof buf, pdMS_TO_TICKS(40));
+        /* Its own cues first; then the speech, but never over a person speaking to it (found 31-10:
+           a message arriving mid-sentence was said over them). */
+        size_t got = xStreamBufferReceive(cues, buf, sizeof buf, 0);
+        if (got < 2 && !speech_held()) got = xStreamBufferReceive(stream, buf, sizeof buf, pdMS_TO_TICKS(40));
+        else if (got < 2) vTaskDelay(pdMS_TO_TICKS(40));
         if (got >= 2) {
             if (!playing) { board_amp(true); playing = true; }
             idle = 0;
@@ -34,6 +39,9 @@ void sounds_init(void)
     static StaticStreamBuffer_t meta;
     uint8_t *mem = heap_caps_malloc(STREAM_BYTES + 1, MALLOC_CAP_SPIRAM);
     stream = xStreamBufferCreateStatic(STREAM_BYTES, 2, mem, &meta);
+    static StaticStreamBuffer_t cue_meta;
+    uint8_t *cue_mem = heap_caps_malloc(64 * 1024 + 1, MALLOC_CAP_SPIRAM);
+    cues = xStreamBufferCreateStatic(64 * 1024, 2, cue_mem, &cue_meta);
     xTaskCreatePinnedToCore(player, "player", 4096, NULL, 9, NULL, 0);   // above the microphone and the wake word: no gaps
 }
 
@@ -49,7 +57,7 @@ void speech_stop(void)
 
 bool speech_idle(void)
 {
-    return xStreamBufferIsEmpty(stream) && !playing;
+    return xStreamBufferIsEmpty(stream) && xStreamBufferIsEmpty(cues) && !playing;
 }
 
 // A note: frequency glide from f0 to f1, with a short attack and an exponential fade.
@@ -67,7 +75,7 @@ static void note(float f0, float f1, int ms, float gain)
             float env = (i < 160 ? i / 160.0f : 1) * expf(-3.5f * x);
             chunk[j] = (int16_t)(gain * 32767 * env * sinf(phase));
         }
-        xStreamBufferSend(stream, chunk, m * 2, pdMS_TO_TICKS(1000));
+        xStreamBufferSend(cues, chunk, m * 2, pdMS_TO_TICKS(1000));
     }
 }
 
@@ -75,13 +83,14 @@ static void rest(int ms)
 {
     int16_t zero[BOX_CHUNK] = {0};
     for (int n = BOX_RATE * ms / 1000; n > 0; n -= BOX_CHUNK)
-        xStreamBufferSend(stream, zero, (n > BOX_CHUNK ? BOX_CHUNK : n) * 2, pdMS_TO_TICKS(1000));
+        xStreamBufferSend(cues, zero, (n > BOX_CHUNK ? BOX_CHUNK : n) * 2, pdMS_TO_TICKS(1000));
 }
 
 void sounds_play(sound_t s)
 {
     switch (s) {
     case SND_DING:  note(880, 1320, 180, 0.22f); break;                              // rising
+    case SND_HEARD: note(1175, 1175, 70, 0.1f); rest(40); note(1568, 1568, 90, 0.1f); break;   // light "got it"
     case SND_TIC:   note(1500, 1400, 45, 0.2f); break;                               // soft tick
     case SND_ERROR: note(660, 640, 160, 0.16f); note(523, 510, 240, 0.14f); break;   // soft: an alert sounds, an error only says so   // two notes down
     case SND_CHIME: note(1047, 1047, 300, 0.35f); note(784, 784, 300, 0.3f); note(1047, 1047, 450, 0.3f); rest(200); break;
@@ -89,3 +98,6 @@ void sounds_play(sound_t s)
     case SND_DONE:  note(784, 784, 120, 0.18f); note(1175, 1175, 220, 0.18f); break;
     }
 }
+
+/* Speech received and not yet played (held while someone speaks). */
+bool speech_waiting(void) { return !xStreamBufferIsEmpty(stream); }

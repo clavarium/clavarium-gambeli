@@ -13,9 +13,14 @@ static volatile led_pattern_t pattern = LED_OFF;
 static volatile uint32_t color;
 static volatile uint32_t since;   // tick when the pattern was set
 
+static float shown[LED_COUNT][3];
+
+/* Lights rise gently (a sudden switch-on was harsh, 31-10) and fall as asked: the fade-out was liked. */
 static void put(int i, uint32_t rgb, float k)
 {
-    led_strip_set_pixel(strip, i, ((rgb >> 16) & 255) * k, ((rgb >> 8) & 255) * k, (rgb & 255) * k);
+    float want[3] = { ((rgb >> 16) & 255) * k, ((rgb >> 8) & 255) * k, (rgb & 255) * k };
+    for (int j = 0; j < 3; j++) shown[i][j] = want[j] > shown[i][j] ? shown[i][j] + (want[j] - shown[i][j]) * 0.1f : want[j];
+    led_strip_set_pixel(strip, i, (uint32_t)shown[i][0], (uint32_t)shown[i][1], (uint32_t)shown[i][2]);
 }
 
 static void animate(void *arg)

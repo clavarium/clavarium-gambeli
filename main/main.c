@@ -20,6 +20,7 @@ static state_t state = ST_OFFLINE;
 static QueueHandle_t events;
 static volatile bool listening, muted;
 static bool speak_ending;
+static bool listen_after;   // the answer was a question: listen again once it is said
 static char alert_id[48];
 static int alert_chimes;
 static TickType_t state_since, last_ping;
@@ -28,6 +29,8 @@ static char pending_ack[160];
 static int knocks[6][3]; static int knock_at;
 void knock_note(int peak, int rms, int quiet) { knocks[knock_at][0] = peak; knocks[knock_at][1] = rms; knocks[knock_at][2] = quiet; knock_at = (knock_at + 1) % 6; }
 int knock_seen(int i, int what) { return knocks[(knock_at + 5 - i) % 6][what]; }   // an ack to send once the link is back (after wifi.join)
+
+bool speech_held(void) { return listening; }
 
 void post_event(ev_type_t type, int arg, char *text)
 {
@@ -101,6 +104,7 @@ static void listen_end(const char *reason)
     if (!listening) return;
     listening = false;
     send_simple("listen.end", "reason", reason);
+    sounds_play(SND_HEARD);   // a light "got it" before the answer
     set_state(ST_THINK);
 }
 
@@ -143,10 +147,12 @@ static void mic_task(void *arg)
         double sum = 0;
         for (int i = 0; i < n; i++) sum += (double)pcm[i] * pcm[i];
         float rms = sqrtf(sum / n);
-        if (chunks < 10) floor = (floor * chunks + rms) / (chunks + 1);
+        if (chunks < 10) floor = chunks ? fminf(floor, rms) : rms;           // the quietest moment: someone already speaking must not raise it
         chunks++;
-        if (rms > fmaxf(350, floor * 2.2f)) { heard = true; quiet = 0; } else quiet++;   // a softer voice still counts
-        if (heard && quiet >= 70) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }          // 1.4 s of silence: the end of a sentence, not a breath (0.8 s cut people short)
+        /* Hysteresis: a voice starts loud, but a trailing, softer voice still holds the sentence open. */
+        float bar = heard ? fmaxf(250, floor * 1.6f) : fmaxf(350, floor * 2.2f);
+        if (rms > bar) { heard = true; quiet = 0; } else quiet++;
+        if (heard && quiet >= 100) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }         // 2 s of silence (1.4 s still cut people mid-thought, 31-10)
         else if (chunks >= 15 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 1, NULL); } // 15 s at most
     }
 }
@@ -252,11 +258,12 @@ static void on_message(char *text)
         }
         ack(id, true, NULL);
     } else if (!strcmp(t, "speak.start")) {
-        listening = false;
         speak_ending = false;
         speech_accept = true;
-        set_state(ST_SPEAK);
+        if (!listening) set_state(ST_SPEAK);   // someone is speaking: it waits for the end of their sentence
     } else if (!strcmp(t, "speak.end")) {
+        const char *then = cJSON_GetStringValue(cJSON_GetObjectItem(m, "then"));
+        listen_after = then && !strcmp(then, "listen");
         speak_ending = true;
     } else if (!strcmp(t, "alert")) {
         strlcpy(alert_id, id ? id : "", sizeof alert_id);
@@ -418,7 +425,11 @@ void app_main(void)
             }
         }
         TickType_t now = xTaskGetTickCount();
-        if (state == ST_SPEAK && speak_ending && speech_idle()) { speech_accept = false; speak_ending = false; set_state(ST_IDLE); }
+        if (!listening && state != ST_SPEAK && state != ST_UPDATE && speech_waiting()) set_state(ST_SPEAK);   // held speech, now said
+        if (state == ST_SPEAK && speak_ending && speech_idle()) {
+            speech_accept = false; speak_ending = false; set_state(ST_IDLE);
+            if (listen_after && !muted) { listen_after = false; listen_start("follow"); }   // a question was asked: the reply needs no wake word
+        }
         if (state == ST_ERROR && now - state_since > pdMS_TO_TICKS(1500)) set_state(ST_IDLE);
         if (state == ST_THINK && now - state_since > pdMS_TO_TICKS(120000)) set_state(ST_IDLE);   // no answer came: quietly back
         if (state == ST_ALERT && alert_chimes < 3 && now - state_since > pdMS_TO_TICKS(alert_chimes * 4000)) {
