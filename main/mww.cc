@@ -118,3 +118,15 @@ extern "C" void mww_feed(const int16_t *pcm, int n)
         if (used == 0) break;
     }
 }
+
+/* A fresh start after an exchange: the features' noise estimate had learnt the box's own voice (and the
+   model's streaming state, a sentence ago), so the next "Hey Jarvis" was heard badly (31-10). */
+extern "C" void mww_reset(void)
+{
+    if (!ready) return;
+    FrontendReset(&state);
+    interpreter->Reset();
+    memset(recent, 0, sizeof recent);
+    stride_step = 0;
+    ignore = -WINDOW * 4;
+}

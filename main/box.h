@@ -69,6 +69,7 @@ void improv_start(void);
 // mww.cc: the wake word, heard on the chip (microWakeWord)
 bool mww_start(void);
 void mww_feed(const int16_t *pcm, int n);            // mono, 16 kHz
+void mww_reset(void);                                // after an exchange: forget it
 
 // ota.c
 bool ota_install(const char *url, const char *sha256, char *detail, size_t detail_len);

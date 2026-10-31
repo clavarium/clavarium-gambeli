@@ -146,6 +146,11 @@ static void mic_task(void *arg)
         if (n <= 0) continue;
         for (int i = 0; i < n; i++) pcm[i] = four[4 * i + 1];              // the first microphone
         if (!listening) {
+            /* After a sentence, or once the box has finished speaking: the wake word starts afresh. */
+            static bool busy_before;
+            bool busy = !speech_idle();
+            if (was || (busy_before && !busy)) mww_reset();
+            busy_before = busy;
             was = false;
             mww_feed(pcm, n);                                              // only the wake word hears it, on the chip
             /* Knock knock: two short, sharp sounds 0.15 to 0.7 s apart, the box quiet -- as a press. */
@@ -441,7 +446,10 @@ void app_main(void)
             case EV_MSG: on_message(ev.text); free(ev.text); break;
             case EV_KEY_SHORT: on_key(ev.arg); break;
             case EV_KEY_LONG: enter_setup(); break;
-            case EV_WAKE: if (!muted && !listening && state != ST_OFFLINE && state != ST_UPDATE && state != ST_ALERT) listen_start("wake"); break;
+            case EV_WAKE:
+                if (!muted && !listening && state != ST_OFFLINE && state != ST_UPDATE && state != ST_ALERT) listen_start("wake");
+                else if (state == ST_OFFLINE) error_cue();   // heard, but not connected yet: say so rather than nothing
+                break;
             case EV_LISTEN_END: listen_end(ev.arg ? "timeout" : "silence"); break;
             case EV_TICK: if (ev.arg == 1 && state == ST_UPDATE) set_state(ST_IDLE); break;
             default: break;
