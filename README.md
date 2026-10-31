@@ -66,7 +66,7 @@ npm test
 
 ## Not yet
 
-- A wake word (esp-sr): only the button for now.
+- A wake word of its own name: "Jarvis" for now (Espressif WakeNet9), heard on the chip.
 - Secure Boot, so that an update must be signed: needs a signing key held by the owner.
 - NVS encryption (flash encryption).
 

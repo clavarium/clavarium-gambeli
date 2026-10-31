@@ -82,12 +82,12 @@ static void error_cue(void)
 
 /* ---- microphone ---- */
 
-static void listen_start(void)
+static void listen_start(const char *reason)
 {
     speech_stop();
     speech_accept = false;
     sounds_play(SND_DING);
-    send_simple("listen.start", "reason", "button");
+    send_simple("listen.start", "reason", reason);
     listening = true;
     set_state(ST_LISTEN);
 }
@@ -103,28 +103,26 @@ static void listen_end(const char *reason)
 static void mic_task(void *arg)
 {
     static int16_t pcm[BOX_CHUNK];
+    bool was = false, ended = false, heard = false;
+    int skip = 0, chunks = 0, quiet = 0;
+    float floor = 0;
     for (;;) {
-        if (!listening || muted) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
-        // A new sentence: let the "ding" finish and drop what the codec held meanwhile.
-        for (int i = 0; i < 15 && listening; i++) board_mic_read(pcm, BOX_CHUNK);
-        float floor = 0;
-        int chunks = 0, quiet = 0;
-        bool heard = false;
-        while (listening && !muted) {
-            int n = board_mic_read(pcm, BOX_CHUNK);
-            if (n <= 0) continue;
-            link_send_audio(pcm, n);
-            double sum = 0;
-            for (int i = 0; i < n; i++) sum += (double)pcm[i] * pcm[i];
-            float rms = sqrtf(sum / n);
-            if (chunks < 10) floor = (floor * chunks + rms) / (chunks + 1);
-            chunks++;
-            bool voice = rms > fmaxf(500, floor * 3);
-            if (voice) { heard = true; quiet = 0; } else quiet++;
-            if (heard && quiet >= 40) { post_event(EV_LISTEN_END, 0, NULL); break; }     // 0.8 s of silence
-            if (chunks >= 15 * 1000 / 20) { post_event(EV_LISTEN_END, 1, NULL); break; } // 15 s at most
-        }
-        while (listening) vTaskDelay(pdMS_TO_TICKS(10));   // the main task closes the sentence
+        if (muted) { was = false; vTaskDelay(pdMS_TO_TICKS(20)); continue; }   // muted: the microphone is not read at all
+        int n = board_mic_read(pcm, BOX_CHUNK);
+        if (n <= 0) continue;
+        if (!listening) { was = false; wake_feed(pcm, n); continue; }       // only the wake word hears it, on the chip
+        if (!was) { was = true; ended = false; heard = false; skip = 15; chunks = 0; quiet = 0; floor = 0; }
+        if (skip > 0) { skip--; continue; }                                 // the "ding", and what the codec held meanwhile
+        if (ended) continue;                                                // the main task closes the sentence
+        link_send_audio(pcm, n);
+        double sum = 0;
+        for (int i = 0; i < n; i++) sum += (double)pcm[i] * pcm[i];
+        float rms = sqrtf(sum / n);
+        if (chunks < 10) floor = (floor * chunks + rms) / (chunks + 1);
+        chunks++;
+        if (rms > fmaxf(500, floor * 3)) { heard = true; quiet = 0; } else quiet++;
+        if (heard && quiet >= 40) { ended = true; post_event(EV_LISTEN_END, 0, NULL); }          // 0.8 s of silence
+        else if (chunks >= 15 * 1000 / 20) { ended = true; post_event(EV_LISTEN_END, 1, NULL); } // 15 s at most
     }
 }
 
@@ -316,7 +314,7 @@ static void on_key(int key)
     case ST_OFFLINE: case ST_UPDATE: error_cue(); break;
     default:
         if (muted) { sounds_play(SND_CLICK); leds_set(LED_BLINK2, 0xff0000); break; }
-        listen_start();   // also interrupts an answer being spoken
+        listen_start("button");   // also interrupts an answer being spoken
     }
 }
 
@@ -362,6 +360,7 @@ void app_main(void)
     xTaskCreate(mic_task, "mic", 6144, NULL, 7, NULL);
     xTaskCreate(keys_task, "keys", 3072, NULL, 4, NULL);
     status_start();
+    wake_start();
 
     for (;;) {
         box_ev_t ev;
@@ -387,6 +386,7 @@ void app_main(void)
             case EV_MSG: on_message(ev.text); free(ev.text); break;
             case EV_KEY_SHORT: on_key(ev.arg); break;
             case EV_KEY_LONG: enter_setup(); break;
+            case EV_WAKE: if (!muted && !listening && state != ST_OFFLINE && state != ST_UPDATE && state != ST_ALERT) listen_start("wake"); break;
             case EV_LISTEN_END: listen_end(ev.arg ? "timeout" : "silence"); break;
             case EV_TICK: if (ev.arg == 1 && state == ST_UPDATE) set_state(ST_IDLE); break;
             default: break;

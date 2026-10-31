@@ -1,8 +1,10 @@
 # Name,   Type, SubType, Offset,   Size
-# The settings (nvs) sit AFTER the programs: a browser flash writes one image from 0x0 to the
-# end of the program, gaps included, and would wipe them where ESP-IDF puts them by default.
+# The settings (nvs) stay at 0x820000 for good: a browser flash writes one image from 0x0 to the
+# end of its last part, and everything before nvs (programs, models) is in it -- never nvs itself.
+# The "model" partition holds the speech models (the wake word): written by the cable only.
 otadata,  data, ota,     0xf000,   0x2000
 phy_init, data, phy,     0x11000,  0x1000
-ota_0,    app,  ota_0,   0x20000,  0x400000
-ota_1,    app,  ota_1,   0x420000, 0x400000
+ota_0,    app,  ota_0,   0x20000,  0x300000
+ota_1,    app,  ota_1,   0x320000, 0x300000
+model,    data, spiffs,  0x620000, 0x200000
 nvs,      data, nvs,     0x820000, 0x6000
