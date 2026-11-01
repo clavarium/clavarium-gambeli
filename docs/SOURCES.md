@@ -71,3 +71,11 @@ Les grandes radios changent parfois d'adresse : en cas d'échec, reprendre l'adr
 | ffmpeg (programme à part) | LGPL/GPL, appelé comme programme : non contaminant | lire, convertir, mixer, générer des tonalités |
 | Tone.js | MIT | synthèse dans le navigateur |
 | jsfxr / sfxr | libre (Unlicense / MIT selon le portage) | bips et effets de jeu |
+
+## Histoires lues (domaine public)
+
+**LibriVox** — livres lus par des bénévoles, domaine public, MP3 sur archive.org. Chercher :
+`https://archive.org/advancedsearch.php?q=<titre>+librivox&fl[]=identifier&fl[]=title&fl[]=language&output=json`,
+puis `https://archive.org/metadata/<identifier>/files` (prendre les `_64kb.mp3`).
+Repères en français : `contes_temps_passe_librivox` (Perrault : Chaperon rouge, Belle au bois dormant, Chat botté,
+Cendrillon, Petit Poucet…), `contes_en_vers_librivox`, la série « Il était une fois… » (contes pour enfants).
