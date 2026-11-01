@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 const sherpa = createRequire(`${process.env.SIM_SHERPA ?? process.cwd()}/`)('sherpa-onnx-node');
 const [out, ...words] = process.argv.slice(2); mkdirSync(out, { recursive: true });
 for (const v of ['upmc-medium', 'siwis-medium', 'tom-medium', 'gilles-low']) {
-  const dir = `${process.env.SIM_VOICES ?? "voices"}/vits-piper-fr_FR-${v}`;
+  const dir = `${process.env.SIM_VOICES ?? 'voices'}/vits-piper-fr_FR-${v}`;
   const tts = new sherpa.OfflineTts({ model: { vits: { model: `${dir}/fr_FR-${v}.onnx`, tokens: `${dir}/tokens.txt`, dataDir: `${dir}/espeak-ng-data` }, numThreads: 1 }, maxNumSentences: 1 });
   for (const [w, word] of words.entries()) for (const speed of [0.85, 1, 1.2]) {
     const a = tts.generate({ text: word, sid: 0, speed });

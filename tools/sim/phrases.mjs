@@ -14,7 +14,7 @@ const phrases = [
   'euh', 'attends', 'comment dire', 'voilà', 'et puis aussi',
 ];
 for (const v of voices) {
-  const dir = `${process.env.SIM_VOICES ?? "voices"}/vits-piper-fr_FR-${v}`;
+  const dir = `${process.env.SIM_VOICES ?? 'voices'}/vits-piper-fr_FR-${v}`;
   const tts = new sherpa.OfflineTts({ model: { vits: { model: `${dir}/fr_FR-${v}.onnx`, tokens: `${dir}/tokens.txt`, dataDir: `${dir}/espeak-ng-data` }, numThreads: 1 }, maxNumSentences: 1 });
   phrases.forEach((p, i) => {
     const a = tts.generate({ text: p, sid: 0, speed: 1.0 });

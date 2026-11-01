@@ -10,20 +10,33 @@ own examples.
 
 ## What it does
 
-| State | Sound | Ring |
+- **Wakes on a word** said in the room -- « Mésange », a microWakeWord model trained for it (training/mesange) --
+  or on a press of the button. Deaf to its own voice: a second detector hears what it plays.
+- **Hears a whole sentence**, up to five minutes: the end is found against the room's own noise (a TV, a
+  fan), held through pauses; tuned on a simulator of thousands of real recordings (tools/sim).
+- **Says the answer** in Clavarium's voice, sentence by sentence, at a level eased to the room; its own
+  speech is never cut by a new one.
+- **Plays a radio, a podcast, a story**, the assistant's voice over it; records a long meeting on request.
+- **Says why it listened** (the word and its score, the button, a conversation going on) and what it cut short.
+
+| Moment | Sound | Ring |
 |---|---|---|
-| Setup (its own Wi-Fi) | — | blue, slow pulse |
-| Idle, connected | — | off (a red dot when muted) |
-| Listening (short press) | rising "ding" | blue |
-| Thinking | soft tick | blue, turning |
-| Speaking | the answer | white, breathing |
-| Error | two notes down | red, two blinks |
-| Alert | chime, 3 times at most | bright red until a press: the only bright light |
-| Offline | — | a faint amber glow, slow |
+| Listening | rising | steady blue |
+| Got it | two light notes | turning blue |
+| Stopped listening | two falling notes | lights out |
+| A message comes | a small bell | warm breathing |
+| Recording | — | slow red glow |
+| Alert | chime | bright red until a press: the only bright light |
+| Offline | — | a faint amber glow |
 | Updating | — | violet, turning |
 
-Keys: the first one listens (and stops an answer to listen again); held 5 s it opens setup. The
-second one mutes the microphone. The third one listens too.
+By night (its place's time, from Clavarium) the lights fall to a few percent, with an hour's fade.
+
+## With Clavarium
+
+The box talks to a server over one WebSocket: its protocol is in **PROTOCOL.md** (Clavarium's DEVICES.md is
+the same). Clavarium is the server today -- pairing, dictation, voice, the assistant -- but the protocol is
+open: any server that speaks it can have the box.
 
 ## Setup
 
