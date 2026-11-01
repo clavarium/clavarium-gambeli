@@ -5,3 +5,5 @@ sdkconfig.old
 node_modules/
 gambeli.bin
 gambeli-full.bin
+__pycache__/
+*.pyc
