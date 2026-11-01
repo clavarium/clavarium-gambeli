@@ -49,6 +49,7 @@ static void player(void *arg)
             float want = sqrtf(ep_room_level() / 400.0f);
             want = want < 0.45f ? 0.45f : want > 1.0f ? 1.0f : want;
             for (size_t i = 0; i < got / 2; i++) { g += (want - g) * 0.0005f; buf[i] = (int16_t)(buf[i] * g); }
+            mww_feed_out(buf, got / 2);
             board_play(buf, got / 2);
         } else if (playing && ++idle > 25) {   // a second of nothing: amplifier off
             board_amp(false);
