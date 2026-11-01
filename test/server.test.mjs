@@ -1,9 +1,11 @@
-import { test } from 'node:test';
+import { test as base } from 'node:test';
+const test = (name, fn) => base(name, { skip: WebSocket ? false : 'ws is not installed' }, fn);
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import WebSocket from 'ws';
+/* ws is a dev dependency: a checkout without node_modules (the pre-push check) skips these tests. */
+const WebSocket = await import('ws').then((m) => m.default).catch(() => null);
 import { startServer, CODE } from './server.mjs';
 
 const pair = (port, code) => fetch(`http://127.0.0.1:${port}/c/api/box/pair`, {
