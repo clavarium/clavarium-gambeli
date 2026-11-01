@@ -6,7 +6,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { WebSocketServer } from 'ws';
+const { WebSocketServer } = await import('ws').catch(() => ({ WebSocketServer: null }));   /* ws: a dev dependency (the tests skip without it) */
 
 export const CODE = 'TEST-0000';
 
