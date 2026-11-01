@@ -63,9 +63,14 @@ static void put(int i, uint32_t rgb, float k, float t)
     uint32_t out[3];
     for (int j = 0; j < 3; j++) {
         shown[i][j] = from[i][j] + (want[j] - from[i][j]) * e;
-        float v = shown[i][j] + carry[i][j];
-        out[j] = v < 0 ? 0 : v > 255 ? 255 : (uint32_t)v;
-        carry[i][j] = v - out[j];
+        /* Dithering smooths ramps, but at night's few levels it switched a light between 0 and 1 fifty times a
+           second: a visible flicker (01-11). Under 6 levels, the nearest level, held. */
+        if (shown[i][j] < 6.0f) { out[j] = (uint32_t)(shown[i][j] + 0.5f); carry[i][j] = 0; }
+        else {
+            float v = shown[i][j] + carry[i][j];
+            out[j] = v < 0 ? 0 : v > 255 ? 255 : (uint32_t)v;
+            carry[i][j] = v - out[j];
+        }
     }
     led_strip_set_pixel(strip, i, out[0], out[1], out[2]);
 }
