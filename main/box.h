@@ -74,7 +74,9 @@ void mww_feed(const int16_t *pcm, int n);            // mono, 16 kHz
 void mww_strict(int level);                           // 0 quiet, 1 a stream plays (near-certain only), 2 its own voice (deaf)
 void mww_reset(void);
 void mww_feed_out(const int16_t *pcm, int n);        // what the box is about to play: its own word is told apart
-bool mww_two(void);                                  // the second detector runs                                // after an exchange: forget it
+bool mww_two(void);
+bool mww_own_ignored(void);                           // once: its own voice said the word, ignored
+bool sounds_noise_dropped(void);                     // once: the noise guard cut a sound                                  // the second detector runs                                // after an exchange: forget it
 
 // ota.c
 bool ota_install(const char *url, const char *sha256, char *detail, size_t detail_len);

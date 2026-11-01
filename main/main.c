@@ -117,13 +117,23 @@ static void record_stop(const char *reason)
     set_state(ST_THINK);
 }   // listening again without a wake word: a short wait for an answer
 
+/* WHY IT LISTENS (01-11): the reason, the wake word's score when it was the word, and what it cut short --
+   its own speech, a stream -- so a false wake or a sentence cut short can be understood, not guessed. */
+static int wake_score = -1;
 static void listen_start(const char *reason)
 {
     follow = !strcmp(reason, "follow");
+    bool cut = !speech_idle();
     speech_stop();
     speech_accept = false;
     sounds_play(SND_DING);
-    send_simple("listen.start", "reason", reason);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "listen.start");
+    cJSON_AddStringToObject(o, "reason", reason);
+    if (!strcmp(reason, "wake") && wake_score >= 0) cJSON_AddNumberToObject(o, "score", wake_score / 255.0);
+    if (cut) cJSON_AddStringToObject(o, "cut", state == ST_SPEAK ? "its own speech" : "a sound");
+    send_obj(o);
+    wake_score = -1;
     listening = true;
     set_state(ST_LISTEN);
 }
@@ -464,6 +474,7 @@ void app_main(void)
             case EV_KEY_SHORT: on_key(ev.arg); break;
             case EV_KEY_LONG: enter_setup(); break;
             case EV_WAKE:
+                wake_score = ev.arg;
                 if (recording) { record_stop("wake"); break; }
                 if (!muted && !listening && state != ST_OFFLINE && state != ST_UPDATE && state != ST_ALERT) listen_start("wake");
                 else if (state == ST_OFFLINE) error_cue();   // heard, but not connected yet: say so rather than nothing
@@ -475,6 +486,8 @@ void app_main(void)
         }
         TickType_t now = xTaskGetTickCount();
         if (record_pending && !listening && speech_idle()) record_start();
+        if (sounds_noise_dropped()) send_simple("event", "name", "noise.dropped");   // the guard cut a sound: said, not silent
+        if (mww_own_ignored()) send_simple("event", "name", "wake.own");             // its own voice said the word: ignored
         if (!listening && state != ST_SPEAK && state != ST_UPDATE && speech_waiting()) set_state(ST_SPEAK);   // held speech, now said
         if (state == ST_SPEAK && speak_ending && speech_idle()) {
             speech_accept = false; speak_ending = false; set_state(ST_IDLE);

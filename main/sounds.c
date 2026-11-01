@@ -17,6 +17,9 @@ static StreamBufferHandle_t stream;   // speech from Clavarium: held while someo
 static StreamBufferHandle_t cues;     // the box's own short sounds: always played at once
 static volatile bool playing;
 
+static volatile bool noise_dropped;
+bool sounds_noise_dropped(void) { bool b = noise_dropped; noise_dropped = false; return b; }
+
 static void player(void *arg)
 {
     static int16_t buf[BOX_CHUNK];
@@ -39,7 +42,7 @@ static void player(void *arg)
             static int loud;
             long sum = 0; for (size_t i = 0; i < got / 2; i++) sum += abs(buf[i]);
             if (sum / (long)(got / 2) > 14000) {
-                if (++loud >= 3) { speech_stop(); loud = 0; ESP_LOGW("sounds", "noise dropped"); }
+                if (++loud >= 3) { speech_stop(); loud = 0; noise_dropped = true; ESP_LOGW("sounds", "noise dropped"); }
                 continue;
             }
             loud = 0;

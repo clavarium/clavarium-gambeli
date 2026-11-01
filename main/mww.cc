@@ -42,7 +42,10 @@ struct Detector {
     int last = 0, stride_step = 0, ignore = 0;
 };
 static Detector mic, out;
-static volatile TickType_t out_heard;   // when the box's own sound last said the word
+static volatile TickType_t out_heard;
+static volatile bool own_ignored;
+static int sum_last;   // the last detection's mean probability (0-255)
+extern "C" bool mww_own_ignored(void) { bool b = own_ignored; own_ignored = false; return b; }   // when the box's own sound last said the word
 static volatile int cutoff = CUTOFF_QUIET;
 static const int CUTOFF_OWN_SOUND = (int)(0.99f * 255);
 /* 0: quiet, its own cutoff; 1: the box plays (its voice, a stream), near-certain only and checked against what
@@ -116,6 +119,7 @@ static bool infer(Detector &d, const int8_t *features, int bar)
     int sum = 0;
     for (int i = 0; i < WINDOW; i++) sum += d.recent[i];
     if (sum <= bar * WINDOW) return false;
+    sum_last = sum / WINDOW;
     memset(d.recent, 0, sizeof d.recent);
     d.ignore = -WINDOW * 3;   // not twice for one word
     return true;
@@ -137,7 +141,7 @@ static void feed(Detector &d, const int16_t *pcm, int n, bool microphone)
             else if (infer(d, f, cutoff)) {
                 bool own = out.interpreter && xTaskGetTickCount() - out_heard < pdMS_TO_TICKS(1500);
                 ESP_LOGI(TAG, "wake word%s", own ? ": its own voice, ignored" : "");
-                if (!own) post_event(EV_WAKE, 0, NULL);
+                if (!own) post_event(EV_WAKE, sum_last, NULL); else own_ignored = true;
             }
         }
         if (used == 0) break;
