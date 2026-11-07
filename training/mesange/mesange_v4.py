@@ -1,6 +1,6 @@
-"""Mésange v3 : les outils du carnet d'entraînement (Colab), en Python simple, testables hors Colab.
+"""Mésange v4 : les outils du carnet d'entraînement (Colab), en Python simple, testables hors Colab.
 
-Le carnet mesange-entrainement-v3.ipynb écrit ce fichier dans /content/mesange_v3.py (cellule 1) et l'importe.
+Le carnet mesange-entrainement-v4.ipynb écrit ce fichier dans /content/mesange_v4.py (cellule 1) et l'importe.
 Rien ici n'a besoin du GPU ; les parties « boîtier » (score comme le firmware) ont besoin de pymicro_features
 et d'un interpréteur TFLite (ai_edge_litert ou tensorflow), importés seulement quand on s'en sert.
 
@@ -10,9 +10,17 @@ et d'un interpréteur TFLite (ai_edge_litert ou tensorflow), importés seulement
   - lire_export(archive, dossier) : l'export des clips du boîtier (zip, tar ou dossier), trié en positifs/négatifs ;
   - Cache : les étapes coûteuses gardées sur Google Drive, reprises après une coupure ;
   - ModeleBoitier, scores_flux, reveils, meilleur_score : le modèle noté exactement comme le boîtier (main/mww.cc) ;
-  - tableau_metriques, seuil_conseille : la table finale 0,90-0,99.
+  - tableau_metriques, seuil_conseille : la table finale 0,90-0,99 ;
+  - synthese, rogne, Ecoute, dit_le_mot : les exemples du mot, gardés seulement si la voix a vraiment dit le mot (v4).
+
+Pourquoi la v4 (le modèle v3 ne se réveillait que sur 3 % des « Mésange » propres) : deux des cinq voix ne savent pas
+dire le mot. fr_FR-gilles-low n'a pas le signe de la voyelle nasale (« Missing phoneme from id map ») et babille 4 à 11 s ;
+fr_FR-mls-medium dit autre chose (Whisper y entend « Merci, merci », « S'il vous plaît »…), quel que soit le locuteur.
+40 % des exemples d'apprentissage n'étaient donc pas le mot, et la note finale ne prenait ses « Mésange » que chez
+ces voix-là (mls) et le locuteur 0 d'upmc (souvent « Maison »). La v4 retire ces deux voix, écoute chaque exemple
+avec Whisper et ne garde que ceux où l'on entend le mot.
 """
-import csv, hashlib, io, json, os, shutil, subprocess, tarfile, time, urllib.request, wave, zipfile
+import csv, hashlib, io, json, os, re, shutil, subprocess, tarfile, time, unicodedata, urllib.request, wave, zipfile
 
 import numpy as np
 
@@ -86,7 +94,7 @@ def telecharge(urls, dest, essais=5, attente=10):
         for k in range(essais):
             try:
                 tmp = dest + '.part'
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (mesange-v3)'})
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (mesange-v4)'})
                 with urllib.request.urlopen(req, timeout=120) as r, open(tmp, 'wb') as f:
                     shutil.copyfileobj(r, f, 1 << 20)
                 if os.path.getsize(tmp) == 0: raise IOError('fichier vide')
@@ -535,10 +543,66 @@ def voix_piper(dossier, voix, base='https://huggingface.co/rhasspy/piper-voices/
             telecharge(f'{base}{chemin}/{nom}{ext}', os.path.join(dossier, nom + ext))
 
 
-def synthese(dossier_voix, voix, textes, n, dossier, graine, eval_seulement=False):
+def phonemes_manquants(voix, texte):
+    """Les phonèmes du texte que la voix Piper ne connaît pas (« Missing phoneme from id map ») : [] si elle sait le dire."""
+    return sorted({p for phrase in voix.phonemize(texte) for p in phrase if p not in voix.config.phoneme_id_map})
+
+
+def rogne(x, seuil_db=-40.0, marge_s=0.05):
+    """Retire le silence avant et après la parole (trames de 10 ms à plus de `seuil_db` sous le maximum), en gardant
+    `marge_s` de chaque côté : le mot finit alors toujours à la même distance de la fin de la fenêtre d'apprentissage."""
+    x = np.asarray(x, np.float32)
+    n = len(x) // 160
+    if n == 0: return x
+    e = 10 * np.log10((x[:n * 160].reshape(n, 160) ** 2).mean(axis=1) + 1e-12)
+    actif = np.flatnonzero(e > e.max() + seuil_db)
+    m = int(marge_s * RATE)
+    return x[max(0, actif[0] * 160 - m):min(len(x), (actif[-1] + 1) * 160 + m)]
+
+
+def lettres(texte):
+    """« Mé-sange ! » -> « mesange » : minuscules, sans accents, lettres seules."""
+    t = unicodedata.normalize('NFKD', str(texte).lower()).encode('ascii', 'ignore').decode()
+    return re.sub(r'[^a-z]', '', t)
+
+
+# Ce que Whisper écrit quand il entend [mezɑ̃ʒ] : Mésange, Maisange, Mes anges, Messange, Mésanche...
+MOT_ENTENDU = re.compile(r'^m(e|ai|ei)(s|ss|z)an(g|j|ch)(e|es)?$')
+
+
+def dit_le_mot(transcription, motif=MOT_ENTENDU):
+    """La transcription n'est-elle que le mot (rien avant, rien après) ?"""
+    return bool(motif.match(lettres(transcription)))
+
+
+class Ecoute:
+    """Whisper (faster-whisper) en français : vérifie qu'un exemple de synthèse dit bien le mot. GPU si possible."""
+
+    def __init__(self, taille='small'):
+        from faster_whisper import WhisperModel   # noms complets : un dossier « small » ou « base » ici serait pris pour le modèle
+        try:
+            self.m = WhisperModel(f'Systran/faster-whisper-{taille}', device='cuda', compute_type='float16')
+        except Exception as e:
+            print('Whisper sans GPU (', e, ') : modèle « base » sur le processeur')
+            self.m = WhisperModel('Systran/faster-whisper-base', device='cpu', compute_type='int8')
+
+    def texte(self, x):
+        z = np.zeros(RATE // 2, np.float32)
+        segs, _ = self.m.transcribe(np.concatenate([z, np.asarray(x, np.float32), z]), language='fr', beam_size=1,
+                                    condition_on_previous_text=False, vad_filter=False)
+        return ''.join(s.text for s in segs).strip()
+
+    def __call__(self, x):
+        return dit_le_mot(self.texte(x))
+
+
+def synthese(dossier_voix, voix, textes, n, dossier, graine, eval_seulement=False, ecoute=None, duree_max=2.0, essais=8):
     """n clips des `textes` par les voix Piper, en wav 16 kHz dans `dossier` (reprend où il en était).
     Locuteurs des voix à plusieurs locuteurs : 1 sur 5 (id % 5 == 0) réservé à l'évaluation ;
-    eval_seulement=True ne prend que ceux-là (et seulement ces voix-là)."""
+    eval_seulement=True ne prend que ceux-là (et seulement ces voix-là).
+    v4 : une voix qui ne connaît pas un phonème des textes est refusée ; chaque clip est rogné (silences) ; avec
+    `ecoute` (Ecoute()), un clip n'est gardé que si l'on y entend le mot et s'il dure au plus `duree_max` s ;
+    au plus `essais` fois n tentatives. Le compte des refus est écrit dans dossier/refus.json."""
     import random
     from piper import PiperVoice, SynthesisConfig
     os.makedirs(dossier, exist_ok=True)
@@ -548,26 +612,35 @@ def synthese(dossier_voix, voix, textes, n, dossier, graine, eval_seulement=Fals
     charges = []
     for _, nom in voix:
         v = PiperVoice.load(os.path.join(dossier_voix, nom + '.onnx'))
+        manque = sorted({p for t in textes for p in phonemes_manquants(v, t)})
+        assert not manque, f'{nom} ne sait pas dire {textes[0]!r} (phonèmes absents : {manque}) : retirer cette voix'
         loc = v.config.num_speakers or 1
         ids = [s for s in range(loc) if (s % 5 == 0) == eval_seulement] if loc > 1 else ([None] if not eval_seulement else [])
-        if ids: charges.append((v, ids))
+        if ids: charges.append((nom, v, ids))
     assert charges, 'aucune voix utilisable'
-    k = deja
+    refus = {nom: 0 for nom, _, _ in charges}
+    k, tentatives = deja, 0
     while k < n:
-        v, ids = charges[k % len(charges)]
+        tentatives += 1
+        assert tentatives <= essais * n, f'trop de refus ({refus}) : les voix ne disent pas le mot'
+        nom, v, ids = charges[tentatives % len(charges)]
         cfg = SynthesisConfig(speaker_id=rnd.choice(ids), length_scale=rnd.uniform(0.75, 1.25),
                               noise_scale=rnd.uniform(0.4, 1.0), noise_w_scale=rnd.uniform(0.5, 1.0))
         audio = b''.join(c.audio_int16_bytes for c in v.synthesize(rnd.choice(textes), syn_config=cfg))
-        x = en16k(np.frombuffer(audio, np.int16).astype(np.float32) / 32768, v.config.sample_rate)
+        x = rogne(en16k(np.frombuffer(audio, np.int16).astype(np.float32) / 32768, v.config.sample_rate))
+        if ecoute is not None and (len(x) > duree_max * RATE or not ecoute(x)):
+            refus[nom] += 1; continue
         ecrit16k(os.path.join(dossier, f'{k:05d}.wav'), x)
         k += 1
+    json.dump({'gardes': k - deja, 'tentatives': tentatives, 'refus': refus}, open(os.path.join(dossier, 'refus.json'), 'w'))
+    print(dossier, ':', k - deja, 'gardés sur', tentatives, '; refusés par voix :', refus)
     return k
 
 
-def augmenteur(fonds, rirs, duree=3.2, snr=(-5, 10), proba_fond=0.75):
+def augmenteur(fonds, rirs, duree=3.2, snr=(-5, 10), proba_fond=0.75, proba_hauteur=0.1):
     from microwakeword.audio.augmentation import Augmentation
     return Augmentation(augmentation_duration_s=duree,
-                        augmentation_probabilities={"SevenBandParametricEQ": 0.1, "TanhDistortion": 0.1, "PitchShift": 0.1,
+                        augmentation_probabilities={"SevenBandParametricEQ": 0.1, "TanhDistortion": 0.1, "PitchShift": proba_hauteur,
                                                     "BandStopFilter": 0.1, "AddColorNoise": 0.1, "AddBackgroundNoise": proba_fond,
                                                     "Gain": 1.0, "RIR": 0.5},
                         impulse_paths=rirs, background_paths=fonds,
@@ -592,6 +665,7 @@ def spectrogrammes(source, cible, augmenter, positif=False, nom_mmap='neg_mmap')
         else:
             gen = SpectrogramGeneration(clips=clips, augmenter=augmenter, slide_frames=1, step_ms=10)
             rep = 1
+        os.makedirs(os.path.join(cible, split), exist_ok=True)   # mmap_ninja ne crée que le dernier dossier
         RaggedMmap.from_generator(out_dir=os.path.join(cible, split, nom_mmap),
                                   sample_generator=gen.spectrogram_generator(split=nom, repeat=rep),
                                   batch_size=100, verbose=True)

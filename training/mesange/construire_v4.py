@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Fabrique mesange-entrainement-v3.ipynb : les cellules ci-dessous + mesange_v3.py (cellule 1, %%writefile).
+"""Fabrique mesange-entrainement-v4.ipynb : les cellules ci-dessous + mesange_v4.py (cellule 1, %%writefile).
 
-    python3 construire_v3.py      # après avoir changé une cellule ou mesange_v3.py ; puis python3 test_v3.py
+    python3 construire_v4.py      # après avoir changé une cellule ou mesange_v4.py ; puis python3 test_v4.py
 """
 import json, os
 
 ICI = os.path.dirname(os.path.abspath(__file__))
-SORTIE = os.path.join(ICI, 'mesange-entrainement-v3.ipynb')
+SORTIE = os.path.join(ICI, 'mesange-entrainement-v4.ipynb')
 
 ENTETE = '''import os, sys, json, glob, shutil, tempfile
 import numpy as np
 sys.path.insert(0, '/content'); os.chdir('/content')
-from mesange_v3 import *
+from mesange_v4 import *
 P = json.load(open('/content/params.json'))   # écrit par la cellule 3
 cache = Cache(P['drive'])
 '''
@@ -22,39 +22,47 @@ def code(texte, entete=True): CELLULES.append(('code', ((ENTETE + '\n') if entet
 
 
 md('''
-# Gambeli : mot de réveil « Mésange », version 3
+# Gambeli : mot de réveil « Mésange », version 4
 
 **Pourquoi la v3** : le modèle v1 se réveille sur la radio, la télé et la conversation en français (« mes anges »,
 « mise en… »). La v3 apprend avec, comme contre-exemples : de la parole française lue (MLS), de la parole de radio
 et de télé (MediaSpeech FR), des mots qui sonnent pareil, et les vrais faux réveils du boîtier (session radio du 07-11).
 
+**Pourquoi la v4** : la v3 ne se réveillait que sur 3 % des « Mésange » propres. Deux des cinq voix de synthèse ne
+disent pas le mot : *gilles-low* n'a pas la voyelle nasale (« Missing phoneme from id map ») et babille, *mls-medium*
+dit tout autre chose. La v4 n'utilise que les voix qui le disent (siwis, tom, upmc), fait écouter chaque exemple par
+Whisper et ne garde que ceux où l'on entend « Mésange », retire « mes anges » des contre-exemples (mêmes sons que le
+mot), ne garde que le mot seul (plus de « Mésange, dis-moi »), varie davantage la hauteur de voix, et donne plus de
+poids au mot. L'évaluation (cellule 12) est celle de la v3.
+
 **Mode d'emploi** (aussi fait par l'assistant de Chrome, voir CHROME-AGENT.md) :
 1. *Exécution › Modifier le type d'exécution* › **GPU T4** › *Enregistrer*.
 2. Cellule 3 : mettre le lien de l'export des clips du boîtier dans `NEGATIFS` (ou laisser vide).
 3. *Exécution › Tout exécuter*. La cellule 2 redémarre la session **la première fois** : relancer alors *Tout exécuter*.
-4. Compter ≈ 3 h. Tout est gardé sur Google Drive (dossier `gambeli-mesange-v3`) : après une coupure,
+4. Compter ≈ 3 h 30. Tout est gardé sur Google Drive (dossier `gambeli-mesange-v4`) : après une coupure,
    *Tout exécuter* reprend où cela s'était arrêté (l'entraînement repart de sa dernière étape gardée).
-5. À la fin, `mesange-v3.zip` se télécharge (aussi copié sur Drive) : mesange.tflite, mesange.json, metriques-v3.json.
+5. À la fin, `mesange-v4.zip` se télécharge (aussi copié sur Drive) : mesange.tflite, mesange.json, metriques-v4.json.
 
 La cellule 12 (évaluation) est la mesure de référence : **ne pas la modifier**.
 ''')
 
-CELLULES.append(('code', '%%writefile /content/mesange_v3.py\n# 1. Les outils du carnet (mesange_v3.py) : rien à changer ici.\n'
-                 + open(os.path.join(ICI, 'mesange_v3.py'), encoding='utf-8').read().rstrip('\n')))
+CELLULES.append(('code', '%%writefile /content/mesange_v4.py\n# 1. Les outils du carnet (mesange_v4.py) : rien à changer ici.\n'
+                 + open(os.path.join(ICI, 'mesange_v4.py'), encoding='utf-8').read().rstrip('\n')))
 
 code('''
 # 2. Installation (une seule fois par session Colab) -- la session redémarre ensuite d'elle-même : c'est normal,
 #    relancez alors « Tout exécuter ». Versions épinglées : celles qui ont tourné sur Colab le 31-10.
 import os, sys, subprocess
 sys.path.insert(0, '/content'); os.chdir('/content')
-from mesange_v3 import sh, patch_microwakeword, versions
+from mesange_v4 import sh, patch_microwakeword, versions
 MWW_COMMIT = '4665173cd35f1cff9a61e06fc427f124766c488e'     # microWakeWord, « Pin dependencies (#98) »
 PAQUETS = ["piper-tts==1.3.0", "pymicro-features==2.0.2", "ai-edge-litert==2.3.0", "audiomentations==0.43.1",
-           "mmap-ninja==0.9.0", "webrtcvad-wheels==2.0.14.post1", "soundfile", "pyyaml", "librosa",
+           "mmap-ninja==0.9.0", "webrtcvad-wheels==2.0.14.post1", "soundfile", "pyyaml", "librosa", "faster-whisper==1.2.1",
            "git+https://github.com/whatsnowplaying/audio-metadata@d4ebb238e6a401bb1a5aaaac60c9e2b3cb30929f"]
 VERIF = ("import tensorflow as tf, numpy, microwakeword, pymicro_features, audiomentations, mmap_ninja, soundfile, yaml; "
          "from microwakeword.audio.clips import Clips; from microwakeword.audio.spectrograms import SpectrogramGeneration; "
          "from piper import PiperVoice, SynthesisConfig; from ai_edge_litert.interpreter import Interpreter; "
+         "from faster_whisper import WhisperModel; "
          "print('tensorflow', tf.__version__, 'numpy', numpy.__version__, 'GPU', len(tf.config.list_physical_devices('GPU')))")
 
 def verifie():
@@ -62,7 +70,7 @@ def verifie():
     print(r.stdout.strip() or r.stderr.strip()[-3000:])
     return r.returncode == 0, r.stdout
 
-if os.path.exists('/content/.installed-v3'):
+if os.path.exists('/content/.installed-v4'):
     print('Déjà installé : on continue.')
 else:
     if not os.path.isdir('microWakeWord/.git'):
@@ -79,7 +87,7 @@ else:
     if 'GPU 0' in sortie:
         print("ATTENTION : pas de GPU. Exécution › Modifier le type d'exécution › GPU T4, puis tout relancer.")
         raise SystemExit('pas de GPU')
-    open('/content/.installed-v3', 'w').write('ok')
+    open('/content/.installed-v4', 'w').write('ok')
     print('Installé. La session redémarre (normal) : relancez « Tout exécuter ».')
     os.kill(os.getpid(), 9)
 ''', entete=False)
@@ -88,19 +96,19 @@ code('''
 # 3. Paramètres, Google Drive (pour reprendre après une coupure) et l'export des clips du boîtier.
 import os, sys, json, glob
 sys.path.insert(0, '/content'); os.chdir('/content')
-from mesange_v3 import *
+from mesange_v4 import *
 
 MOT, NOM = 'Mésange', 'mesange'
 NEGATIFS = ''          # lien de l'export des clips du boîtier (zip) ; vide : un fichier déposé dans /content
-                       # (negatifs*.zip) ou sur Drive (gambeli-mesange-v3/negatifs.zip) ; sinon on s'en passe.
+                       # (negatifs*.zip) ou sur Drive (gambeli-mesange-v4/negatifs.zip) ; sinon on s'en passe.
 ETAPES = 15000         # étapes d'entraînement (v2 : 15000)
 
-assert os.path.exists('/content/.installed-v3'), "Lancez d'abord la cellule 2."
+assert os.path.exists('/content/.installed-v4'), "Lancez d'abord la cellule 2."
 drive = ''
 try:
     from google.colab import drive as _d
     _d.mount('/content/drive')
-    drive = '/content/drive/MyDrive/gambeli-mesange-v3'
+    drive = '/content/drive/MyDrive/gambeli-mesange-v4'
     os.makedirs(drive, exist_ok=True)
 except Exception as e:
     print('Google Drive non monté (', e, ') : pas de reprise possible après une coupure, on continue quand même.')
@@ -125,13 +133,18 @@ print(json.dumps(P, ensure_ascii=False, indent=1))
 code('''
 # 4. Le mot dit par des voix françaises de synthèse (Piper) : 3000 pour apprendre ; 400 par des locuteurs
 #    jamais entendus à l'entraînement, pour la note finale ; et les mots qui sonnent pareil (contre-exemples).
-VOIX = [('fr/fr_FR/mls/medium', 'fr_FR-mls-medium'), ('fr/fr_FR/upmc/medium', 'fr_FR-upmc-medium'),
-        ('fr/fr_FR/siwis/medium', 'fr_FR-siwis-medium'), ('fr/fr_FR/tom/medium', 'fr_FR-tom-medium'),
-        ('fr/fr_FR/gilles/low', 'fr_FR-gilles-low')]
+#    v4 : seulement les voix qui savent dire le mot (gilles-low n'a pas la voyelle nasale de « -sange », mls-medium
+#    dit autre chose) ; chaque exemple du mot est écouté par Whisper et gardé seulement si l'on y entend « Mésange »
+#    (upmc le réussit environ 1 fois sur 8 : c'est normal que beaucoup d'essais soient refusés).
+import gc
+VOIX = [('fr/fr_FR/siwis/medium', 'fr_FR-siwis-medium'), ('fr/fr_FR/tom/medium', 'fr_FR-tom-medium'),
+        ('fr/fr_FR/upmc/medium', 'fr_FR-upmc-medium')]
 MOT = P['mot']
-DITES = [MOT, MOT + ' !', MOT + ' ?', MOT + '.', 'Mé-sange', MOT.lower(), MOT + ', dis-moi', MOT + ', écoute']
+# Le mot seul : la fenêtre d'apprentissage finit 0,2 s après lui (avec « Mésange, dis-moi », elle finirait sur « dis-moi »).
+DITES = [MOT, MOT + ' !', MOT + ' ?', MOT + '.', 'Mé-sange', MOT.lower()]
 # Ce que le boîtier a pris pour le mot (07-11) et ce qui sonne comme lui, sans l'être.
-VOISINS = ['mes anges', 'les anges', 'des anges', 'mais sans', 'mes sangles', 'mélange', 'le mélange', 'mésentente',
+# Pas « mes anges » : mêmes sons que « Mésange » ([mezɑ̃ʒ]) ; l'apprendre comme contre-exemple contredit le mot.
+VOISINS = ['les anges', 'des anges', 'mais sans', 'mes sangles', 'mélange', 'le mélange', 'mésentente',
            'message', 'messages', 'méchant', 'mes enfants', 'les enfants', 'des ans', 'mais en', 'mais encore',
            'mise en œuvre', 'mise en jeu', 'mise en route', 'mise en place', 'mes doigts', 'les ongles', 'mes ongles',
            'mais si', 'mais ça change', 'des oranges', 'des mésaventures', 'mais je mange', 'massage', 'ma sauge',
@@ -141,12 +154,16 @@ if cache.reprend('voix'):
     print('voix et exemples repris de Drive')
 else:
     voix_piper('voix', VOIX)
-    print(synthese('voix', VOIX, DITES, 3000, 'generated_samples', graine=1), 'exemples du mot (apprentissage)')
-    print(synthese('voix', VOIX, DITES, 400, 'eval_positifs', graine=2, eval_seulement=True), 'exemples du mot (note finale)')
+    ecoute = Ecoute()
+    print(synthese('voix', VOIX, DITES, 3000, 'generated_samples', graine=1, ecoute=ecoute), 'exemples du mot (apprentissage)')
+    print(synthese('voix', VOIX, DITES, 400, 'eval_positifs', graine=2, eval_seulement=True, ecoute=ecoute, essais=30),
+          'exemples du mot (note finale)')
+    del ecoute; gc.collect()
     print(synthese('voix', VOIX, VOISINS, 1600, 'near_words', graine=3), 'mots voisins')
     cache.garde('voix', ['voix', 'generated_samples', 'eval_positifs', 'near_words'])
-print(len(os.listdir('generated_samples')), len(os.listdir('eval_positifs')), len(os.listdir('near_words')))
+print(len(glob.glob('generated_samples/*.wav')), len(glob.glob('eval_positifs/*.wav')), len(glob.glob('near_words/*.wav')))
 ''')
+
 
 code('''
 # 5. Bruits et pièces pour « salir » les exemples : réponses impulsionnelles MIT, AudioSet (1 tranche), FMA (musique).
@@ -192,7 +209,8 @@ print(len(os.listdir('mit_rirs')), 'RIR,', len(os.listdir('audioset_16k')), 'aud
 
 code('''
 # 6. Les exemples du mot, « salis » (bruit, pièce, distorsion), en spectrogrammes pour l'entraînement.
-aug = augmenteur(['fma_16k', 'audioset_16k'], ['mit_rirs'])
+#    v4 : hauteur de voix changée une fois sur deux (v3 : 1 sur 10), pour d'autres voix que les trois de synthèse.
+aug = augmenteur(['fma_16k', 'audioset_16k'], ['mit_rirs'], proba_hauteur=0.5)
 print(spectrogrammes('generated_samples', 'generated_augmented_features', aug, positif=True, nom_mmap='wakeword_mmap'))
 ''')
 
@@ -209,7 +227,7 @@ print(sorted(os.listdir('negative_datasets')))
 ''')
 
 code('''
-# 8. Contre-exemples FRANÇAIS (le cœur de la v3) :
+# 8. Contre-exemples FRANÇAIS (le cœur de la v4) :
 #  a) parole lue : MLS français (CC-BY 4.0), ≈ 15 h, locuteurs d'apprentissage ;
 #  b) radio et télé : MediaSpeech FR (CC-BY 4.0, ≈ 10 h d'émissions) : 4 fichiers sur 5 (le 5e sert à la note finale) ;
 #  c) les mots voisins (cellule 4) ; d) les faux réveils du boîtier (export, cellule 3) : 4 sur 5.
@@ -295,13 +313,15 @@ for d in ['eval_mls', 'ms_test', 'eval_positifs', 'eval_positifs_bruit', 'boitie
 ''')
 
 code('''
-# 10. Réglages de l'entraînement (ceux de la v2, plus les nouveaux contre-exemples français).
+# 10. Réglages de l'entraînement (ceux de la v3, avec plus de poids pour le mot).
 import yaml
 def neg(d, poids, penalite=1.0):
     return {"features_dir": d, "sampling_weight": poids, "penalty_weight": penalite, "truth": False,
             "truncation_strategy": "random", "type": "mmap"}
 features = [
-    {"features_dir": "generated_augmented_features", "sampling_weight": 2.0, "penalty_weight": 1.0, "truth": True,
+    # v4 : 5 au lieu de 2, pour garder la part du mot de la recette microWakeWord (2 sur 27, 7 %) malgré les
+    # contre-exemples français ajoutés (v3 : 2 sur 61, 3 %).
+    {"features_dir": "generated_augmented_features", "sampling_weight": 5.0, "penalty_weight": 1.0, "truth": True,
      "truncation_strategy": "truncate_start", "type": "mmap"},
     neg("negative_datasets/speech", 10.0), neg("negative_datasets/dinner_party", 10.0), neg("negative_datasets/no_speech", 5.0),
     neg("negative_datasets/fr_speech", 12.0),                 # parole française lue
@@ -378,22 +398,22 @@ for nom, d in [('propre', 'eval_positifs'), ('bruit', 'eval_positifs_bruit'), ('
 lignes = tableau_metriques(fa, rappels)
 conseil = seuil_conseille(lignes)
 metriques = {
-    'modele': 'mesange v3', 'etapes': int(P['etapes']), 'date': time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime()),
+    'modele': 'mesange v4', 'etapes': int(P['etapes']), 'date': time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime()),
     'heures': {k: round(v['heures'], 3) for k, v in fa.items()}, 'clips': {k: len(v) for k, v in rappels.items()},
     'seuils': lignes, 'seuil_conseille': conseil,
     'regle_seuil': 'au plus 0,5 réveil/h sur la parole française, puis le plus de vrais appels, le meilleur rappel « bruit », le plus bas ; sinon le moins de réveils',
     'export_boitier': P['boitier'], 'versions': versions(), 'duree_evaluation_s': round(time.time() - t0),
 }
-json.dump(metriques, open('metriques-v3.json', 'w'), indent=1, ensure_ascii=False)
+json.dump(metriques, open('metriques-v4.json', 'w'), indent=1, ensure_ascii=False)
 print(texte_tableau(lignes))
 print('seuil conseillé :', conseil)
 ''')
 
 code('''
-# 13. Le paquet final : mesange.tflite + mesange.json + metriques-v3.json dans mesange-v3.zip, téléchargé (et copié sur Drive).
+# 13. Le paquet final : mesange.tflite + mesange.json + metriques-v4.json dans mesange-v4.zip, téléchargé (et copié sur Drive).
 import zipfile
 TFLITE = 'trained_models/wakeword/tflite_stream_state_internal_quant/stream_state_internal_quant.tflite'
-m = json.load(open('metriques-v3.json'))
+m = json.load(open('metriques-v4.json'))
 manifeste = {'wake_word': P['mot'],   # même forme que le mesange.json de la v1
              'micro': {'probability_cutoff': m['seuil_conseille'], 'sliding_window_size': 5, 'feature_step_size': 10,
                        'tensor_arena_size': 30000, 'minimum_esphome_version': '2024.7.0'},
@@ -401,15 +421,15 @@ manifeste = {'wake_word': P['mot'],   # même forme que le mesange.json de la v1
 os.makedirs('sortie', exist_ok=True)
 shutil.copy(TFLITE, f"sortie/{P['nom']}.tflite")
 json.dump(manifeste, open(f"sortie/{P['nom']}.json", 'w'), indent=2, ensure_ascii=False)
-shutil.copy('metriques-v3.json', 'sortie/metriques-v3.json')
+shutil.copy('metriques-v4.json', 'sortie/metriques-v4.json')
 shutil.copy('training_parameters.yaml', 'sortie/training_parameters.yaml')
-with zipfile.ZipFile('mesange-v3.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+with zipfile.ZipFile('mesange-v4.zip', 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir('sortie')): z.write(f'sortie/{f}', f)
-print(zipfile.ZipFile('mesange-v3.zip').namelist(), os.path.getsize('mesange-v3.zip'), 'octets')
+print(zipfile.ZipFile('mesange-v4.zip').namelist(), os.path.getsize('mesange-v4.zip'), 'octets')
 if P['drive']:
-    shutil.copy('mesange-v3.zip', f"{P['drive']}/mesange-v3.zip"); print('copié sur Drive :', f"{P['drive']}/mesange-v3.zip")
+    shutil.copy('mesange-v4.zip', f"{P['drive']}/mesange-v4.zip"); print('copié sur Drive :', f"{P['drive']}/mesange-v4.zip")
 from google.colab import files
-files.download('mesange-v3.zip')
+files.download('mesange-v4.zip')
 print(texte_tableau(m['seuils']))
 print('seuil conseillé :', m['seuil_conseille'])
 ''')

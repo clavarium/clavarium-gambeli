@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Tests locaux du carnet v3 (sans Colab, sans GPU ; il faut numpy et scipy) :
+"""Tests locaux du carnet v4 (sans Colab, sans GPU ; il faut numpy et scipy) :
 
-    python3 test_v3.py                       # carnet (JSON, cellules, syntaxe) + outils purs de mesange_v3.py
-    MWW=/chemin/microWakeWord python3 test_v3.py      # + les corrections de microWakeWord (2 fois : idempotent)
-    MESANGE_V1=/chemin/mesange.tflite EVALUATE=/chemin/evaluate.py python3 test_v3.py
+    python3 test_v4.py                       # carnet (JSON, cellules, syntaxe) + outils purs de mesange_v4.py
+    MWW=/chemin/microWakeWord python3 test_v4.py      # + les corrections de microWakeWord (2 fois : idempotent)
+    PIPER_VOIX=/chemin/des/voix python3 test_v4.py   # + les voix du carnet savent dire le mot, gilles-low non (piper-tts)
+    MESANGE_V1=/chemin/mesange.tflite EVALUATE=/chemin/evaluate.py python3 test_v4.py
                                              # + le modèle noté comme le boîtier, comparé à evaluate.py
                                              #   (il faut pymicro_features et ai_edge_litert)
 """
@@ -12,14 +13,14 @@ import ast, importlib.util, json, os, shutil, subprocess, sys, tempfile, wave, z
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ICI)
 import numpy as np
-import mesange_v3 as m
+import mesange_v4 as m
 
 OK = []
 def ok(nom): OK.append(nom); print('ok  ', nom)
 
 
 def test_carnet():
-    nb = json.load(open(os.path.join(ICI, 'mesange-entrainement-v3.ipynb'), encoding='utf-8'))
+    nb = json.load(open(os.path.join(ICI, 'mesange-entrainement-v4.ipynb'), encoding='utf-8'))
     assert nb['nbformat'] == 4 and nb['metadata']['accelerator'] == 'GPU'
     cells = nb['cells']
     assert len(cells) == 14, len(cells)
@@ -35,27 +36,59 @@ def test_carnet():
     attendu = {1: 'outils', 2: 'Installation', 3: 'Paramètres', 4: 'voix', 5: 'Bruits', 6: 'spectrogrammes', 7: 'microWakeWord',
                8: 'FRANÇAIS', 9: 'note finale', 10: 'Réglages', 11: 'entraînement', 12: 'ÉVALUATION', 13: 'paquet final'}
     for i, mot in attendu.items(): assert mot in titres[i], (i, titres[i])
-    assert src[1].startswith('%%writefile /content/mesange_v3.py\n')
-    assert src[1].split('\n', 2)[2].rstrip('\n') == open(os.path.join(ICI, 'mesange_v3.py'), encoding='utf-8').read().rstrip('\n'), \
-        'cellule 1 différente de mesange_v3.py : relancer construire_v3.py'
+    assert src[1].startswith('%%writefile /content/mesange_v4.py\n')
+    assert src[1].split('\n', 2)[2].rstrip('\n') == open(os.path.join(ICI, 'mesange_v4.py'), encoding='utf-8').read().rstrip('\n'), \
+        'cellule 1 différente de mesange_v4.py : relancer construire_v4.py'
     assert 'NE PAS MODIFIER' in src[12] and 'seuil_conseille' in src[12] and 'tableau_metriques' in src[12]
     assert "NEGATIFS = ''" in src[3] and "mount('/content/drive')" in src[3]
-    assert 'files.download' in src[13] and 'mesange-v3.zip' in src[13] and 'metriques-v3.json' in src[13]
-    assert "os.kill(os.getpid(), 9)" in src[2] and '.installed-v3' in src[2]
+    assert 'files.download' in src[13] and 'mesange-v4.zip' in src[13] and 'metriques-v4.json' in src[13]
+    assert "os.kill(os.getpid(), 9)" in src[2] and '.installed-v4' in src[2]
     assert '4665173cd35f1cff9a61e06fc427f124766c488e' in src[2]
     for i, s in enumerate(src[1:], 1):     # syntaxe, sans les commandes IPython
         lignes = [l for l in s.splitlines() if not l.lstrip().startswith(('%', '!'))]
         compile('\n'.join(lignes), f'cellule {i}', 'exec')
-    # le carnet est bien celui que construire_v3.py fabrique
-    spec = importlib.util.spec_from_file_location('construire_v3', os.path.join(ICI, 'construire_v3.py'))
+    # le carnet est bien celui que construire_v4.py fabrique
+    spec = importlib.util.spec_from_file_location('construire_v4', os.path.join(ICI, 'construire_v4.py'))
     c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
-    assert c.nb == nb, 'carnet pas à jour : relancer construire_v3.py'
+    assert c.nb == nb, 'carnet pas à jour : relancer construire_v4.py'
     try:
         import nbformat
         nbformat.validate(nbformat.reads(json.dumps(nb), as_version=4)); ok('nbformat.validate')
     except ImportError:
         pass
-    ok('carnet : JSON, 14 cellules attendues, syntaxe, cellule 1 = mesange_v3.py')
+    ok('carnet : JSON, 14 cellules attendues, syntaxe, cellule 1 = mesange_v4.py')
+
+
+def test_mot_v4():
+    """Ce qui a cassé la v3 : des voix qui ne disent pas le mot, « mes anges » en contre-exemple, le mot pas en fin de fenêtre."""
+    spec = importlib.util.spec_from_file_location('construire_v4', os.path.join(ICI, 'construire_v4.py'))
+    c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
+    cell4 = [t for k, t in c.CELLULES if k == 'code' and '# 4. ' in t][0]
+    ns = {}
+    exec(cell4[cell4.index('VOIX = '):cell4.index('if cache.reprend')], {'P': {'mot': 'Mésange'}}, ns)
+    noms = [n for _, n in ns['VOIX']]
+    assert 'fr_FR-gilles-low' not in noms and 'fr_FR-mls-medium' not in noms, noms
+    assert 'mes anges' not in ns['VOISINS'] and all(',' not in t for t in ns['DITES']), (ns['DITES'], ns['VOISINS'])
+    assert 'ecoute=ecoute' in cell4.split("'eval_positifs'")[0] and 'eval_seulement=True, ecoute=ecoute' in cell4
+    assert "os.makedirs(os.path.join(cible, split), exist_ok=True)" in open(os.path.join(ICI, 'mesange_v4.py'), encoding='utf-8').read()
+    # ce que Whisper a écrit sur de vrais clips (07-11) : gardés / refusés
+    for t in ['Mésange', 'Maisange', 'Mes anges.', 'MESSANGE', 'Mésanche.', 'Mé-sange !']: assert m.dit_le_mot(t), t
+    for t in ['Maison !', 'Mais sans...', 'Merci, merci, merci', 'Mésange, dis-moi', 'Missage.', '', 'Mélange']:
+        assert not m.dit_le_mot(t), t
+    x = np.zeros(16000 * 3, np.float32); x[16000:24000] = 0.3 * np.sin(np.arange(8000) / 3)
+    y = m.rogne(x); assert abs(len(y) - (8000 + 1600)) <= 320, len(y)
+    class Faux:   # une voix Piper sans la nasale, comme gilles-low
+        class config: phoneme_id_map = {p: [1] for p in 'mezˈɑʒ'}
+        def phonemize(self, t): return [list('mezˈɑ̃ʒ')]
+    assert m.phonemes_manquants(Faux(), 'Mésange') == ['\u0303']
+    d = os.environ.get('PIPER_VOIX')
+    if d:
+        from piper import PiperVoice
+        for n in noms: assert m.phonemes_manquants(PiperVoice.load(f'{d}/{n}.onnx'), 'Mésange') == [], n
+        g = f'{d}/fr_FR-gilles-low.onnx'
+        if os.path.exists(g): assert m.phonemes_manquants(PiperVoice.load(g), 'Mésange') == ['\u0303']
+        ok('voix : celles du carnet ont la nasale ' + ('(gilles-low non)' if os.path.exists(g) else ''))
+    ok('v4 : voix, mots, Whisper (garde/refus), rognage, phonèmes manquants, dossiers des spectrogrammes')
 
 
 def test_audio(d):
@@ -232,9 +265,9 @@ def test_boitier(d):
 
 
 if __name__ == '__main__':
-    d = tempfile.mkdtemp(prefix='mesange-v3-')
+    d = tempfile.mkdtemp(prefix='mesange-v4-')
     try:
-        test_carnet(); test_audio(d); test_tenu_a_part(); test_export(d); test_cache(d); test_notes(); test_patch(d); test_boitier(d)
+        test_carnet(); test_mot_v4(); test_audio(d); test_tenu_a_part(); test_export(d); test_cache(d); test_notes(); test_patch(d); test_boitier(d)
     finally:
         shutil.rmtree(d, ignore_errors=True)
     print(f'{len(OK)} tests passés')

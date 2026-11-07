@@ -42,3 +42,17 @@ Le fichier mesange.json utilise probability_cutoff = 0,9.
 4. À la fin, mesange.zip se télécharge (sinon : panneau Fichiers à gauche, clic droit › Télécharger).
 
 Pistes d'amélioration : plus d'étapes (training_steps), d'autres voix ou de vrais enregistrements du mot, plus de bruits de fond.
+
+## v3 (07-11) et v4
+v3 (mesange-entrainement-v3.ipynb, gardé tel qu'il a tourné) : 0,16 réveil/h sur la parole française, mais seulement
+3 % des « Mésange » propres réveillent au seuil 0,97 (26 % avec bruit). Cause : deux des cinq voix Piper ne disent pas
+le mot. fr_FR-gilles-low n'a pas le signe de la nasale ɑ̃ (« Missing phoneme from id map ») et babille 4 à 11 s ;
+fr_FR-mls-medium dit autre chose, quel que soit le locuteur (Whisper : « Merci, merci », « S'il vous plaît »…).
+upmc ne réussit le mot qu'environ 1 fois sur 8. Les « Mésange » de la note finale venaient justement de mls et du
+locuteur 0 d'upmc. Et « mes anges », mêmes sons que le mot, était appris comme contre-exemple.
+
+v4 (construire_v4.py -> mesange-entrainement-v4.ipynb ; mesange_v4.py ; test_v4.py) : voix siwis, tom, upmc ;
+chaque exemple du mot écouté par Whisper et gardé seulement s'il dit le mot ; plus de « mes anges » en contre-exemple ;
+le mot seul (plus de « Mésange, dis-moi ») ; silences rognés ; hauteur de voix variée 1 fois sur 2 ; poids du mot 5
+(au lieu de 2). Notation et seuils inchangés. Dossier Drive neuf (gambeli-mesange-v4) : rien n'est repris de la v3.
+Limite : trois voix de synthèse seulement ; de vrais « Mésange » enregistrés sur le boîtier restent le meilleur ajout.
