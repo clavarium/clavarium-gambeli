@@ -20,7 +20,7 @@ fr_FR-mls-medium dit autre chose (Whisper y entend « Merci, merci », « S'il v
 ces voix-là (mls) et le locuteur 0 d'upmc (souvent « Maison »). La v4 retire ces deux voix, écoute chaque exemple
 avec Whisper et ne garde que ceux où l'on entend le mot.
 """
-import csv, hashlib, io, json, os, re, shutil, subprocess, tarfile, time, unicodedata, urllib.request, wave, zipfile
+import csv, hashlib, io, json, os, re, shutil, subprocess, sys, tarfile, time, unicodedata, urllib.request, wave, zipfile
 
 import numpy as np
 
@@ -575,13 +575,31 @@ def dit_le_mot(transcription, motif=MOT_ENTENDU):
     return bool(motif.match(lettres(transcription)))
 
 
+def cuda12():
+    """Colab (11-2026) n'a plus libcublas.so.12 ni cuDNN 9, que faster-whisper charge sur GPU : pris de pip, mis
+    dans le dossier standard des bibliothèques (lu à chaque chargement). Sans GPU ou sans droit : ne fait rien."""
+    import glob, shutil, site, subprocess
+    if glob.glob('/usr/lib/x86_64-linux-gnu/libcublas.so.12*') or not os.path.exists('/usr/lib/x86_64-linux-gnu'):
+        return
+    subprocess.run([sys.executable, '-m', 'pip', '-q', 'install', 'nvidia-cublas-cu12', 'nvidia-cudnn-cu12==9.*'], check=False)
+    for d in site.getsitepackages():
+        for f in glob.glob(d + '/nvidia/cublas/lib/*.so*') + glob.glob(d + '/nvidia/cudnn/lib/*.so*'):
+            try:
+                shutil.copy(f, '/usr/lib/x86_64-linux-gnu/')
+            except OSError:
+                return
+    subprocess.run(['ldconfig'], check=False)
+
+
 class Ecoute:
     """Whisper (faster-whisper) en français : vérifie qu'un exemple de synthèse dit bien le mot. GPU si possible."""
 
     def __init__(self, taille='small'):
         from faster_whisper import WhisperModel   # noms complets : un dossier « small » ou « base » ici serait pris pour le modèle
         try:
+            cuda12()
             self.m = WhisperModel(f'Systran/faster-whisper-{taille}', device='cuda', compute_type='float16')
+            self.texte(np.zeros(RATE, np.float32))   # la bibliothèque GPU n'est chargée qu'au premier passage
         except Exception as e:
             print('Whisper sans GPU (', e, ') : modèle « base » sur le processeur')
             self.m = WhisperModel('Systran/faster-whisper-base', device='cpu', compute_type='int8')
